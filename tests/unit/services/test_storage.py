@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from scan2mesh.exceptions import ConfigError
-from scan2mesh.models import ProjectConfig
+from scan2mesh.models import CapturePlan, CapturePlanPreset, ProjectConfig, ViewPoint
 from scan2mesh.services.storage import StorageService
 
 
@@ -152,3 +152,140 @@ class TestSubdirectories:
 
         assert path.exists()
         assert path == existing
+
+
+class TestSaveCapturePlan:
+    """Tests for save_capture_plan method."""
+
+    def test_save_capture_plan(self, tmp_path: Path) -> None:
+        """Test saving capture plan."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        viewpoints = [
+            ViewPoint(
+                index=0,
+                azimuth_deg=0.0,
+                elevation_deg=0.0,
+                distance_m=0.4,
+                order=0,
+            ),
+            ViewPoint(
+                index=1,
+                azimuth_deg=45.0,
+                elevation_deg=0.0,
+                distance_m=0.4,
+                order=1,
+            ),
+        ]
+
+        plan = CapturePlan(
+            preset=CapturePlanPreset.QUICK,
+            viewpoints=viewpoints,
+            min_required_frames=12,
+            recommended_distance_m=0.4,
+            notes=["Test note"],
+        )
+
+        service.save_capture_plan(plan)
+
+        assert service.capture_plan_path.exists()
+        content = service.capture_plan_path.read_text()
+        assert "quick" in content
+        assert "0.4" in content
+
+    def test_save_capture_plan_path(self, tmp_path: Path) -> None:
+        """Test capture_plan_path property."""
+        service = StorageService(tmp_path)
+        assert service.capture_plan_path == tmp_path / "capture_plan.json"
+
+
+class TestLoadCapturePlan:
+    """Tests for load_capture_plan method."""
+
+    def test_load_capture_plan(self, tmp_path: Path) -> None:
+        """Test loading capture plan."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        # Create capture plan file
+        plan_data = {
+            "preset": "standard",
+            "viewpoints": [
+                {
+                    "index": 0,
+                    "azimuth_deg": 0.0,
+                    "elevation_deg": 15.0,
+                    "distance_m": 0.4,
+                    "order": 0,
+                }
+            ],
+            "min_required_frames": 20,
+            "recommended_distance_m": 0.4,
+            "notes": [],
+        }
+
+        import json
+
+        service.capture_plan_path.write_text(json.dumps(plan_data))
+
+        plan = service.load_capture_plan()
+
+        assert plan.preset == CapturePlanPreset.STANDARD
+        assert len(plan.viewpoints) == 1
+        assert plan.min_required_frames == 20
+
+    def test_load_capture_plan_missing_file(self, tmp_path: Path) -> None:
+        """Test loading nonexistent capture plan raises error."""
+        service = StorageService(tmp_path)
+
+        with pytest.raises(ConfigError, match="not found"):
+            service.load_capture_plan()
+
+    def test_load_capture_plan_invalid_data(self, tmp_path: Path) -> None:
+        """Test loading invalid capture plan raises error."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        # Create invalid plan file
+        service.capture_plan_path.write_text('{"invalid": "data"}')
+
+        with pytest.raises(ConfigError, match="Invalid"):
+            service.load_capture_plan()
+
+    def test_save_and_load_roundtrip(self, tmp_path: Path) -> None:
+        """Test save and load roundtrip preserves data."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        viewpoints = [
+            ViewPoint(
+                index=i,
+                azimuth_deg=float(i * 30),
+                elevation_deg=15.0,
+                distance_m=0.4,
+                order=i,
+            )
+            for i in range(12)
+        ]
+
+        original = CapturePlan(
+            preset=CapturePlanPreset.STANDARD,
+            viewpoints=viewpoints,
+            min_required_frames=20,
+            recommended_distance_m=0.4,
+            notes=["Note 1", "Note 2"],
+        )
+
+        service.save_capture_plan(original)
+        loaded = service.load_capture_plan()
+
+        assert loaded.preset == original.preset
+        assert len(loaded.viewpoints) == len(original.viewpoints)
+        assert loaded.min_required_frames == original.min_required_frames
+        assert loaded.recommended_distance_m == original.recommended_distance_m
+        assert loaded.notes == original.notes

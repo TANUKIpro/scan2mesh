@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from scan2mesh.exceptions import ConfigError, StorageError
-from scan2mesh.models import ProjectConfig
+from scan2mesh.models import CapturePlan, ProjectConfig
 from scan2mesh.utils import load_json, save_json_atomic
 
 
@@ -108,3 +108,35 @@ class StorageService:
             return path
         except OSError as e:
             raise StorageError(f"Failed to create directory {path}: {e}") from e
+
+    def save_capture_plan(self, plan: CapturePlan) -> None:
+        """Save capture plan to file.
+
+        Args:
+            plan: CapturePlan instance to save
+
+        Raises:
+            StorageError: If the save operation fails
+        """
+        data = plan.model_dump(mode="json")
+        save_json_atomic(self.capture_plan_path, data)
+
+    def load_capture_plan(self) -> CapturePlan:
+        """Load capture plan from file.
+
+        Returns:
+            CapturePlan instance
+
+        Raises:
+            ConfigError: If the capture plan file is missing or invalid
+        """
+        if not self.capture_plan_path.exists():
+            raise ConfigError(f"Capture plan not found: {self.capture_plan_path}")
+
+        try:
+            data = load_json(self.capture_plan_path)
+            return CapturePlan.model_validate(data)
+        except StorageError:
+            raise
+        except Exception as e:
+            raise ConfigError(f"Invalid capture plan: {e}") from e
