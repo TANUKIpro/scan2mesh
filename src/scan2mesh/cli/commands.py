@@ -12,6 +12,7 @@ from scan2mesh.cli.display import (
     display_error,
     display_init_result,
     display_not_implemented,
+    display_plan_result,
 )
 from scan2mesh.cli.validators import (
     validate_class_id,
@@ -20,6 +21,7 @@ from scan2mesh.cli.validators import (
     validate_project_dir,
 )
 from scan2mesh.exceptions import NotImplementedStageError, Scan2MeshError
+from scan2mesh.models import CapturePlanPreset
 from scan2mesh.orchestrator import PipelineOrchestrator
 
 
@@ -111,14 +113,38 @@ def plan(
         Path,
         typer.Argument(help="Path to the project directory"),
     ],
+    preset: Annotated[
+        str,
+        typer.Option(
+            "--preset",
+            "-p",
+            help="Capture plan preset (quick, standard, hard)",
+        ),
+    ] = "standard",
 ) -> None:
     """Create a capture plan for the project.
 
     Generates optimal camera viewpoints for 3D reconstruction.
     """
     try:
+        # Validate preset
+        preset_lower = preset.lower()
+        preset_map = {
+            "quick": CapturePlanPreset.QUICK,
+            "standard": CapturePlanPreset.STANDARD,
+            "hard": CapturePlanPreset.HARD,
+        }
+        if preset_lower not in preset_map:
+            display_error(
+                f"Invalid preset: {preset}. Must be one of: quick, standard, hard"
+            )
+            raise typer.Exit(1)
+
+        capture_preset = preset_map[preset_lower]
+
         orchestrator = PipelineOrchestrator(project_dir)
-        orchestrator.run_plan()
+        capture_plan = orchestrator.run_plan(capture_preset)
+        display_plan_result(capture_plan, str(project_dir))
     except NotImplementedStageError:
         display_not_implemented("plan")
         raise typer.Exit(1) from None

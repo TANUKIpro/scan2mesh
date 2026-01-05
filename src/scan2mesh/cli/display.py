@@ -7,7 +7,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from scan2mesh.models import ProjectConfig
+from scan2mesh.models import CapturePlan, ProjectConfig
 
 
 console = Console()
@@ -93,3 +93,34 @@ def display_not_implemented(stage_name: str) -> None:
             border_style="yellow",
         )
     )
+
+
+def display_plan_result(plan: CapturePlan, project_dir: str) -> None:
+    """Display capture plan generation result.
+
+    Args:
+        plan: The created capture plan
+        project_dir: Path to the project directory
+    """
+    table = Table(show_header=False, box=None)
+    table.add_column("Property", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Project Directory", project_dir)
+    table.add_row("Preset", plan.preset.value)
+    table.add_row("Total Viewpoints", str(len(plan.viewpoints)))
+    table.add_row("Min Required Frames", str(plan.min_required_frames))
+    table.add_row("Recommended Distance", f"{plan.recommended_distance_m} m")
+
+    panel = Panel(
+        table,
+        title="[bold green]Capture Plan Generated Successfully[/bold green]",
+        border_style="green",
+    )
+    console.print(panel)
+
+    if plan.notes:
+        console.print()
+        console.print("[bold cyan]Notes:[/bold cyan]")
+        for note in plan.notes:
+            console.print(f"  [dim]-[/dim] {note}")

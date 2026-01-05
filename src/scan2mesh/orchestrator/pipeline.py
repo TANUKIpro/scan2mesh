@@ -7,8 +7,8 @@ import logging
 from pathlib import Path
 
 from scan2mesh.exceptions import NotImplementedStageError
-from scan2mesh.models import OutputPreset, ProjectConfig
-from scan2mesh.stages import ProjectInitializer
+from scan2mesh.models import CapturePlan, CapturePlanPreset, OutputPreset, ProjectConfig
+from scan2mesh.stages import CapturePlanner, ProjectInitializer
 
 
 logger = logging.getLogger("scan2mesh.orchestrator.pipeline")
@@ -67,13 +67,22 @@ class PipelineOrchestrator:
             dimension_type=dimension_type,
         )
 
-    def run_plan(self) -> None:
+    def run_plan(
+        self, preset: CapturePlanPreset = CapturePlanPreset.STANDARD
+    ) -> CapturePlan:
         """Run the capture planning stage.
 
-        Raises:
-            NotImplementedStageError: This stage is not yet implemented
+        Creates a capture plan based on the given preset.
+
+        Args:
+            preset: Capture plan preset type (default: STANDARD)
+
+        Returns:
+            CapturePlan instance
         """
-        raise NotImplementedStageError("PipelineOrchestrator.run_plan")
+        logger.info(f"Running plan stage for project: {self.project_dir}")
+        planner = CapturePlanner(self.project_dir)
+        return planner.generate_plan(preset)
 
     def run_capture(self) -> None:
         """Run the capture stage.
