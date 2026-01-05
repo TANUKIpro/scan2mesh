@@ -1,0 +1,98 @@
+# scan2mesh default configuration
+# This file contains the default settings for the scan2mesh pipeline.
+
+# Pipeline settings
+pipeline:
+  # Base directory for projects
+  projects_dir: "./projects"
+
+  # Logging level (DEBUG, INFO, WARNING, ERROR)
+  log_level: "INFO"
+
+  # Enable detailed progress output
+  verbose: false
+
+# Capture settings
+capture:
+  # Minimum number of frames to capture
+  min_frames: 30
+
+  # Maximum number of frames to capture
+  max_frames: 200
+
+  # Target frame rate
+  fps: 30
+
+  # Depth stream resolution
+  depth_resolution: [640, 480]
+
+  # Color stream resolution
+  color_resolution: [1280, 720]
+
+  # Enable auto-exposure
+  auto_exposure: true
+
+# Preprocessing settings
+preprocess:
+  # Keyframe selection method (uniform, quality_based, coverage_based)
+  keyframe_method: "quality_based"
+
+  # Target number of keyframes
+  target_keyframes: 50
+
+  # Mask generation method (grabcut, sam, depth_threshold)
+  mask_method: "depth_threshold"
+
+  # Blur detection threshold
+  blur_threshold: 100.0
+
+# Reconstruction settings
+reconstruct:
+  # Reconstruction backend (open3d, custom)
+  backend: "open3d"
+
+  # Voxel size for TSDF fusion (in meters)
+  voxel_size: 0.005
+
+  # Truncation distance (in meters)
+  sdf_trunc: 0.04
+
+  # Enable texture mapping
+  enable_texturing: true
+
+# Optimization settings
+optimize:
+  # Target polygon count for LOD0
+  lod0_polygons: 100000
+
+  # Target polygon count for LOD1
+  lod1_polygons: 50000
+
+  # Target polygon count for LOD2
+  lod2_polygons: 10000
+
+  # Simplification method (quadric, uniform)
+  simplification_method: "quadric"
+
+  # Generate collision mesh
+  generate_collision: true
+
+  # Collision mesh target polygons
+  collision_polygons: 1000
+
+# Quality thresholds
+quality:
+  capture:
+    min_coverage: 0.8
+    max_blur: 100.0
+    min_depth_valid_ratio: 0.7
+
+  reconstruct:
+    min_inlier_ratio: 0.6
+    max_reprojection_error: 2.0
+    min_points: 10000
+
+  asset:
+    max_file_size_mb: 50.0
+    min_texture_size: 512
+    max_texture_size: 4096

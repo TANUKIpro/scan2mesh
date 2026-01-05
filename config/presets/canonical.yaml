@@ -1,0 +1,94 @@
+# Canonical preset for Isaac Sim compatibility
+# This preset generates assets optimized for NVIDIA Isaac Sim.
+
+# Coordinate system configuration
+coordinate_system:
+  up_axis: "Z"
+  forward_axis: "X"
+  units: "meters"
+
+# Output format settings
+output:
+  # Primary export format
+  format: "glb"
+
+  # Texture format
+  texture_format: "png"
+
+  # Maximum texture resolution
+  max_texture_resolution: 2048
+
+  # Enable texture compression
+  compress_textures: true
+
+# LOD configuration
+lod:
+  # Generate LOD variants
+  enabled: true
+
+  # LOD levels
+  levels:
+    - name: "LOD0"
+      polygons: 100000
+      texture_scale: 1.0
+
+    - name: "LOD1"
+      polygons: 50000
+      texture_scale: 0.5
+
+    - name: "LOD2"
+      polygons: 10000
+      texture_scale: 0.25
+
+# Collision mesh settings
+collision:
+  # Generate collision mesh
+  enabled: true
+
+  # Collision type (convex_hull, convex_decomposition, mesh)
+  type: "convex_decomposition"
+
+  # Maximum convex hulls for decomposition
+  max_hulls: 16
+
+  # Target polygon count
+  polygons: 1000
+
+# Physics properties
+physics:
+  # Enable physics simulation
+  enabled: true
+
+  # Default density (kg/m³)
+  density: 1000.0
+
+  # Friction coefficient
+  friction: 0.5
+
+  # Restitution (bounciness)
+  restitution: 0.1
+
+# Material settings
+material:
+  # PBR material type
+  type: "metallic_roughness"
+
+  # Default metallic value
+  metallic: 0.0
+
+  # Default roughness value
+  roughness: 0.5
+
+  # Enable normal maps
+  enable_normal_maps: true
+
+# Semantic information
+semantic:
+  # Include class information
+  include_class: true
+
+  # Include object name
+  include_name: true
+
+  # Include provenance metadata
+  include_provenance: true
