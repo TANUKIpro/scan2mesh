@@ -9,6 +9,7 @@ from pathlib import Path
 from scan2mesh.exceptions import NotImplementedStageError
 from scan2mesh.gates.capture import CaptureQualityGate
 from scan2mesh.gates.preprocess import PreprocessQualityGate
+from scan2mesh.gates.reconstruct import ReconQualityGate
 from scan2mesh.gates.thresholds import QualityStatus
 from scan2mesh.models import (
     CaptureMetrics,
@@ -18,12 +19,14 @@ from scan2mesh.models import (
     OutputPreset,
     PreprocessMetrics,
     ProjectConfig,
+    ReconReport,
 )
 from scan2mesh.services import BaseCameraService, StorageService, create_camera_service
 from scan2mesh.stages import (
     CapturePlanner,
     Preprocessor,
     ProjectInitializer,
+    Reconstructor,
     RGBDCapture,
 )
 
@@ -230,13 +233,59 @@ class PipelineOrchestrator:
 
         return metrics_with_status, status, suggestions
 
-    def run_reconstruct(self) -> None:
+    def run_reconstruct(
+        self,
+        voxel_size: float = 0.002,
+        sdf_trunc: float = 0.01,
+    ) -> tuple[ReconReport, QualityStatus, list[str]]:
         """Run the reconstruction stage.
 
-        Raises:
-            NotImplementedStageError: This stage is not yet implemented
+        Args:
+            voxel_size: TSDF voxel size in meters (default: 2mm)
+            sdf_trunc: TSDF truncation distance in meters (default: 10mm)
+
+        Returns:
+            Tuple of (ReconReport, QualityStatus, suggestions)
         """
-        raise NotImplementedStageError("PipelineOrchestrator.run_reconstruct")
+        logger.info(f"Running reconstruct stage for project: {self.project_dir}")
+
+        storage = StorageService(self.project_dir)
+
+        # Create and run reconstructor
+        reconstructor = Reconstructor(
+            project_dir=self.project_dir,
+            storage=storage,
+            voxel_size=voxel_size,
+            sdf_trunc=sdf_trunc,
+        )
+
+        report = reconstructor.reconstruct()
+
+        # Run quality gate
+        gate = ReconQualityGate()
+        status = gate.validate(report)
+        suggestions = gate.get_suggestions()
+
+        # Update report with gate status
+        report_with_status = ReconReport(
+            num_frames_used=report.num_frames_used,
+            tracking_success_rate=report.tracking_success_rate,
+            alignment_rmse_mean=report.alignment_rmse_mean,
+            alignment_rmse_max=report.alignment_rmse_max,
+            drift_indicator=report.drift_indicator,
+            poses=report.poses,
+            tsdf_voxel_size=report.tsdf_voxel_size,
+            mesh_vertices=report.mesh_vertices,
+            mesh_triangles=report.mesh_triangles,
+            processing_time_sec=report.processing_time_sec,
+            gate_status=status.value,
+            gate_reasons=gate.get_reasons(),
+        )
+
+        # Save updated report
+        storage.save_recon_report(report_with_status)
+
+        return report_with_status, status, suggestions
 
     def run_optimize(self) -> None:
         """Run the optimization stage.

@@ -5,6 +5,7 @@ Exception hierarchy:
     ├── ConfigError
     ├── CameraError
     ├── CaptureError
+    ├── ReconstructionError
     ├── PipelineError
     │   └── QualityGateError
     ├── StorageError
@@ -51,6 +52,19 @@ class CaptureError(Scan2MeshError):
     - Capture session fails to start or stop
     - Frame capture fails
     - Capture state is invalid
+    """
+
+    pass
+
+
+class ReconstructionError(Scan2MeshError):
+    """Reconstruction related errors.
+
+    Raised when:
+    - Pose estimation fails completely
+    - TSDF fusion fails
+    - Mesh extraction fails
+    - Insufficient valid frames for reconstruction
     """
 
     pass

@@ -15,6 +15,7 @@ from scan2mesh.cli.display import (
     display_not_implemented,
     display_plan_result,
     display_preprocess_result,
+    display_reconstruct_result,
 )
 from scan2mesh.cli.validators import (
     validate_class_id,
@@ -262,14 +263,37 @@ def reconstruct(
         Path,
         typer.Argument(help="Path to the project directory"),
     ],
+    voxel_size: Annotated[
+        float,
+        typer.Option(
+            "--voxel-size",
+            "-v",
+            help="TSDF voxel size in mm",
+        ),
+    ] = 2.0,
+    sdf_trunc: Annotated[
+        float,
+        typer.Option(
+            "--sdf-trunc",
+            help="TSDF truncation distance in mm",
+        ),
+    ] = 10.0,
 ) -> None:
     """Reconstruct 3D mesh from preprocessed frames.
 
     Performs pose estimation, point cloud generation, and mesh reconstruction.
     """
     try:
+        # Convert mm to meters
+        voxel_size_m = voxel_size / 1000.0
+        sdf_trunc_m = sdf_trunc / 1000.0
+
         orchestrator = PipelineOrchestrator(project_dir)
-        orchestrator.run_reconstruct()
+        report, status, suggestions = orchestrator.run_reconstruct(
+            voxel_size=voxel_size_m,
+            sdf_trunc=sdf_trunc_m,
+        )
+        display_reconstruct_result(report, status, str(project_dir), suggestions)
     except NotImplementedStageError:
         display_not_implemented("reconstruct")
         raise typer.Exit(1) from None

@@ -24,7 +24,7 @@ scan2meshは、Intel RealSenseカメラを用いた3Dスキャンから、シミ
 | 1 | plan | ✅ 完全実装 | 撮影計画生成 |
 | 2 | capture | ✅ 完全実装 | RGBDフレーム取得 |
 | 3 | preprocess | ✅ 完全実装 | 前処理・背景除去 |
-| 4 | reconstruct | 🚧 スタブのみ | 3D復元 |
+| 4 | reconstruct | ✅ 完全実装 | 3D復元 |
 | 5 | optimize | 🚧 スタブのみ | アセット最適化 |
 | 6 | package | 🚧 スタブのみ | パッケージング |
 | 7 | report | 🚧 スタブのみ | 品質レポート |
@@ -34,8 +34,8 @@ scan2meshは、Intel RealSenseカメラを用いた3Dスキャンから、シミ
 | フェーズ | 内容 | ステータス |
 |---------|------|----------|
 | Phase 1 | init, plan の完全実装 | ✅ 完了 |
-| Phase 2 | capture, preprocess の実装 | 🚧 進行中 (capture完了) |
-| Phase 3 | reconstruct, optimize の実装 | 📋 予定 |
+| Phase 2 | capture, preprocess の実装 | ✅ 完了 |
+| Phase 3 | reconstruct, optimize の実装 | 🚧 進行中 (reconstruct完了) |
 | Phase 4 | package, report の実装 | 📋 予定 |
 | Phase 5 | Docker環境の整備 | 📋 予定 |
 
@@ -56,8 +56,8 @@ graph LR
     style A fill:#90EE90
     style B fill:#90EE90
     style C fill:#90EE90
-    style D fill:#FFE4B5
-    style E fill:#FFE4B5
+    style D fill:#90EE90
+    style E fill:#90EE90
     style F fill:#FFE4B5
     style G fill:#FFE4B5
     style H fill:#FFE4B5
@@ -117,26 +117,50 @@ RealSenseカメラからRGB-Dデータを取得します。
 - `raw_frames/`: RGB画像（PNG）と深度データ（.npy）
 - `metrics/capture_metrics.json`: キャプチャメトリクス
 
-### Stage 3: 前処理 (preprocess) 🚧
+### Stage 3: 前処理 (preprocess) ✅
 
 撮影データから背景を除去し、復元に最適な状態に整えます。
 
-**予定機能**:
-- Depthフィルタリング（穴埋め、外れ値除去）
-- RGB-Dアラインメント
-- 背景除去（深度閾値 or 床平面推定）
-- マスク品質の評価
+**機能**:
+- 深度閾値による背景除去
+- マスク画像の生成と保存
+- マスク品質の評価（有効面積比率）
+- 品質ゲートによるPASS/WARN/FAIL判定
 
-### Stage 4: 3D復元 (reconstruct) 🚧
+**出力**:
+- `masked_frames/`: マスク適用済みRGB画像、深度データ、マスク画像
+- `metrics/preprocess_metrics.json`: 前処理メトリクス
+
+### Stage 4: 3D復元 (reconstruct) ✅
 
 前処理済みのRGBDデータから3Dメッシュを生成します。
 
-**予定機能**:
-- フレーム間の姿勢推定（RGBD odometry）
-- TSDFフュージョン
-- メッシュ抽出
-- テクスチャ生成（UV、アトラス）
-- 追跡破綻の検出
+**機能**:
+- RGBDオドメトリによるカメラ姿勢推定
+- TSDF (Truncated Signed Distance Function) フュージョン
+- Marching Cubesによるメッシュ抽出
+- 追跡成功率・アライメントRMSE・ドリフト指標の計測
+- 品質ゲートによるPASS/WARN/FAIL判定
+
+**パラメータ**:
+
+| パラメータ | デフォルト | 説明 |
+|-----------|----------|------|
+| `voxel_size` | 0.002m (2mm) | TSDFボクセルサイズ |
+| `sdf_trunc` | 0.01m (10mm) | TSDF切り捨て距離 |
+
+**品質評価基準**:
+
+| 指標 | PASS | WARN | FAIL |
+|------|------|------|------|
+| 追跡成功率 | ≥90% | ≥70% | <70% |
+| アライメントRMSE | ≤0.01m | ≤0.02m | >0.02m |
+| ドリフト指標 | ≤0.05m | ≤0.1m | >0.1m |
+| メッシュ三角形数 | ≥1000 | - | <1000 |
+
+**出力**:
+- `recon/mesh.ply`: 3Dメッシュ（PLY形式）
+- `recon/recon_report.json`: 復元レポート（姿勢、メトリクス、品質ステータス）
 
 ### Stage 5: アセット最適化 (optimize) 🚧
 
@@ -283,15 +307,37 @@ uv run scan2mesh capture ./projects/robocup_ball --mock --num-frames 30
 uv run scan2mesh capture ./projects/robocup_ball --num-frames 50
 ```
 
+### 4. 前処理の実行
+
+撮影データから背景を除去します。
+
+```bash
+uv run scan2mesh preprocess ./projects/robocup_ball
+```
+
+### 5. 3D復元の実行
+
+前処理済みデータから3Dメッシュを生成します。
+
+```bash
+# 標準設定で復元
+uv run scan2mesh reconstruct ./projects/robocup_ball
+
+# カスタムパラメータで復元（高精度設定）
+uv run scan2mesh reconstruct ./projects/robocup_ball \
+  --voxel-size 0.001 \
+  --sdf-trunc 0.005
+```
+
 ### 次のステップ
 
-現在実装済みの機能は `init`, `plan`, `capture` です。
-Stage 3 (preprocess) 以降は開発中のため、以下のコマンドは `NotImplementedError` を発生させます:
+現在実装済みの機能は `init`, `plan`, `capture`, `preprocess`, `reconstruct` です。
+Stage 5 (optimize) 以降は開発中のため、以下のコマンドは `NotImplementedError` を発生させます:
 
 ```bash
 # これらは現在動作しません
-uv run scan2mesh preprocess ./projects/robocup_ball
-uv run scan2mesh reconstruct ./projects/robocup_ball
+uv run scan2mesh optimize ./projects/robocup_ball
+uv run scan2mesh package ./projects/robocup_ball
 ```
 
 ## コマンドリファレンス
@@ -423,14 +469,95 @@ uv run scan2mesh capture ./projects/ball --num-frames 50
 uv run scan2mesh capture ./projects/ball
 ```
 
+### scan2mesh preprocess
+
+前処理（背景除去）を実行します。
+
+**構文**:
+```bash
+scan2mesh preprocess PROJECT_DIR [OPTIONS]
+```
+
+**引数**:
+
+| 引数 | 型 | 説明 |
+|------|-----|------|
+| `PROJECT_DIR` | PATH | プロジェクトディレクトリのパス |
+
+**オプション**:
+
+| オプション | 短縮形 | 型 | デフォルト | 説明 |
+|-----------|--------|-----|----------|------|
+| `--depth-min` | - | INTEGER | 200 | 最小深度閾値（mm） |
+| `--depth-max` | - | INTEGER | 1000 | 最大深度閾値（mm） |
+
+**品質ゲート**:
+
+| 判定 | 説明 |
+|------|------|
+| PASS | マスク品質が基準を満たしている |
+| WARN | マスク品質が低下しているが使用可能 |
+| FAIL | マスク品質が基準を下回り、再撮影推奨 |
+
+**使用例**:
+
+```bash
+# デフォルト設定で前処理
+uv run scan2mesh preprocess ./projects/ball
+
+# カスタム深度閾値
+uv run scan2mesh preprocess ./projects/ball --depth-min 100 --depth-max 500
+```
+
+### scan2mesh reconstruct
+
+3D復元を実行します。
+
+**構文**:
+```bash
+scan2mesh reconstruct PROJECT_DIR [OPTIONS]
+```
+
+**引数**:
+
+| 引数 | 型 | 説明 |
+|------|-----|------|
+| `PROJECT_DIR` | PATH | プロジェクトディレクトリのパス |
+
+**オプション**:
+
+| オプション | 短縮形 | 型 | デフォルト | 説明 |
+|-----------|--------|-----|----------|------|
+| `--voxel-size` | - | FLOAT | 0.002 | TSDFボクセルサイズ（メートル） |
+| `--sdf-trunc` | - | FLOAT | 0.01 | TSDF切り捨て距離（メートル） |
+
+**品質ゲート**:
+
+| 判定 | 条件 |
+|------|------|
+| PASS | 追跡成功率≥90%, アライメントRMSE≤0.01m, ドリフト≤0.05m, 三角形≥1000 |
+| WARN | 追跡成功率≥70%, アライメントRMSE≤0.02m, ドリフト≤0.1m |
+| FAIL | 上記の条件を満たさない |
+
+**使用例**:
+
+```bash
+# デフォルト設定で復元
+uv run scan2mesh reconstruct ./projects/ball
+
+# 高精度設定（ボクセルサイズ1mm）
+uv run scan2mesh reconstruct ./projects/ball --voxel-size 0.001 --sdf-trunc 0.005
+
+# 高速設定（ボクセルサイズ5mm）
+uv run scan2mesh reconstruct ./projects/ball --voxel-size 0.005 --sdf-trunc 0.02
+```
+
 ### 未実装コマンド
 
 以下のコマンドは現在開発中です（スタブのみ実装）:
 
 | コマンド | 説明 |
 |---------|------|
-| `scan2mesh preprocess PROJECT_DIR` | 前処理の実行 |
-| `scan2mesh reconstruct PROJECT_DIR` | 3D復元の実行 |
 | `scan2mesh optimize PROJECT_DIR` | アセット最適化の実行 |
 | `scan2mesh package PROJECT_DIR` | パッケージングの実行 |
 | `scan2mesh report PROJECT_DIR` | 品質レポートの生成 |
@@ -468,8 +595,8 @@ scan2mesh/
 │   │   ├── init.py           # ✅ ProjectInitializer
 │   │   ├── plan.py           # ✅ CapturePlanner
 │   │   ├── capture.py        # ✅ RGBDCapture
-│   │   ├── preprocess.py     # 🚧 Preprocessor (stub)
-│   │   ├── reconstruct.py    # 🚧 Reconstructor (stub)
+│   │   ├── preprocess.py     # ✅ Preprocessor
+│   │   ├── reconstruct.py    # ✅ Reconstructor
 │   │   ├── optimize.py       # 🚧 AssetOptimizer (stub)
 │   │   ├── package.py        # 🚧 Packager (stub)
 │   │   └── report.py         # 🚧 QualityReporter (stub)

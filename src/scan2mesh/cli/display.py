@@ -13,6 +13,7 @@ from scan2mesh.models import (
     CapturePlan,
     PreprocessMetrics,
     ProjectConfig,
+    ReconReport,
 )
 
 
@@ -236,6 +237,68 @@ def display_preprocess_result(
     table.add_row("  Mask Method", metrics.mask_method.value)
     table.add_row("  Mask Area Ratio (mean)", f"{metrics.mask_area_ratio_mean:.1%}")
     table.add_row("  Mask Area Ratio (min)", f"{metrics.mask_area_ratio_min:.1%}")
+
+    panel = Panel(table, title=title, border_style=border_style)
+    console.print(panel)
+
+    # Display suggestions if any
+    if suggestions:
+        console.print()
+        console.print("[bold cyan]Suggestions for Improvement:[/bold cyan]")
+        for suggestion in suggestions:
+            console.print(f"  [dim]-[/dim] {suggestion}")
+
+
+def display_reconstruct_result(
+    report: ReconReport,
+    status: QualityStatus,
+    project_dir: str,
+    suggestions: list[str] | None = None,
+) -> None:
+    """Display reconstruction result with metrics and quality gate status.
+
+    Args:
+        report: Reconstruction report from the session
+        status: Quality gate status
+        project_dir: Path to the project directory
+        suggestions: Optional list of improvement suggestions
+    """
+    # Determine panel style based on status
+    if status == QualityStatus.PASS:
+        title = "[bold green]Reconstruction Completed Successfully[/bold green]"
+        border_style = "green"
+        status_text = "[green]PASS[/green]"
+    elif status == QualityStatus.WARN:
+        title = "[bold yellow]Reconstruction Completed with Warnings[/bold yellow]"
+        border_style = "yellow"
+        status_text = "[yellow]WARN[/yellow]"
+    else:
+        title = "[bold red]Reconstruction Completed with Issues[/bold red]"
+        border_style = "red"
+        status_text = "[red]FAIL[/red]"
+
+    # Build metrics table
+    table = Table(show_header=False, box=None)
+    table.add_column("Property", style="cyan")
+    table.add_column("Value", style="white")
+
+    table.add_row("Project Directory", project_dir)
+    table.add_row("Quality Status", status_text)
+    table.add_row("")
+    table.add_row("[bold]Tracking Statistics[/bold]", "")
+    table.add_row("  Frames Used", str(report.num_frames_used))
+    table.add_row("  Tracking Success Rate", f"{report.tracking_success_rate:.1%}")
+    table.add_row("  Processing Time", f"{report.processing_time_sec:.1f} seconds")
+    table.add_row("")
+    table.add_row("[bold]Alignment Quality[/bold]", "")
+    table.add_row("  Alignment RMSE (mean)", f"{report.alignment_rmse_mean:.4f} m")
+    table.add_row("  Alignment RMSE (max)", f"{report.alignment_rmse_max:.4f} m")
+    table.add_row("  Drift Indicator", f"{report.drift_indicator:.4f} m")
+    table.add_row("")
+    table.add_row("[bold]Mesh Statistics[/bold]", "")
+    table.add_row("  Vertices", f"{report.mesh_vertices:,}")
+    table.add_row("  Triangles", f"{report.mesh_triangles:,}")
+    table.add_row("  TSDF Voxel Size", f"{report.tsdf_voxel_size * 1000:.1f} mm")
 
     panel = Panel(table, title=title, border_style=border_style)
     console.print(panel)

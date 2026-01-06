@@ -26,6 +26,15 @@ RECON_MIN_INLIER_RATIO: Final[float] = 0.6
 RECON_MAX_REPROJECTION_ERROR: Final[float] = 2.0
 RECON_MIN_POINTS: Final[int] = 10000
 
+# Reconstruction tracking and alignment thresholds
+RECON_MIN_TRACKING_SUCCESS_RATE_PASS: Final[float] = 0.9
+RECON_MIN_TRACKING_SUCCESS_RATE_WARN: Final[float] = 0.7
+RECON_MAX_ALIGNMENT_RMSE_PASS: Final[float] = 0.01  # meters
+RECON_MAX_ALIGNMENT_RMSE_WARN: Final[float] = 0.02  # meters
+RECON_MAX_DRIFT_INDICATOR_PASS: Final[float] = 0.05  # meters
+RECON_MAX_DRIFT_INDICATOR_WARN: Final[float] = 0.1  # meters
+RECON_MIN_MESH_TRIANGLES: Final[int] = 1000
+
 # Preprocess quality thresholds
 PREPROCESS_MIN_MASK_AREA_RATIO: Final[float] = 0.1
 PREPROCESS_MAX_MASK_AREA_RATIO: Final[float] = 0.9

@@ -12,6 +12,7 @@ from scan2mesh.models import (
     FramesMetadata,
     PreprocessMetrics,
     ProjectConfig,
+    ReconReport,
 )
 from scan2mesh.utils import load_json, save_json_atomic
 
@@ -31,8 +32,10 @@ class StorageService:
     FRAMES_METADATA_FILE = "frames_metadata.json"
     CAPTURE_METRICS_FILE = "capture_metrics.json"
     PREPROCESS_METRICS_FILE = "preprocess_metrics.json"
+    RECON_REPORT_FILE = "recon_report.json"
     RAW_FRAMES_DIR = "raw_frames"
     MASKED_FRAMES_DIR = "masked_frames"
+    RECON_DIR = "recon"
 
     def __init__(self, project_dir: Path) -> None:
         """Initialize StorageService.
@@ -76,6 +79,16 @@ class StorageService:
     def preprocess_metrics_path(self) -> Path:
         """Path to preprocess metrics file."""
         return self.project_dir / self.PREPROCESS_METRICS_FILE
+
+    @property
+    def recon_report_path(self) -> Path:
+        """Path to reconstruction report file."""
+        return self.project_dir / self.RECON_REPORT_FILE
+
+    @property
+    def recon_dir(self) -> Path:
+        """Path to reconstruction directory."""
+        return self.project_dir / self.RECON_DIR
 
     def save_project_config(self, config: ProjectConfig) -> None:
         """Save project configuration to file.
@@ -559,3 +572,169 @@ class StorageService:
             raise
         except Exception as e:
             raise ConfigError(f"Invalid preprocess metrics: {e}") from e
+
+    def load_masked_frame_data(
+        self,
+        frame_id: int,
+    ) -> tuple[NDArray[np.uint8], NDArray[np.uint16], NDArray[np.uint8]]:
+        """Load masked RGB, depth, and mask data from files.
+
+        Args:
+            frame_id: Frame identifier
+
+        Returns:
+            Tuple of (rgb_masked, depth_masked, mask) numpy arrays
+
+        Raises:
+            StorageError: If the load operation fails
+        """
+        rgb_path = self.masked_frames_dir / f"frame_{frame_id:04d}_rgb_masked.png"
+        depth_path = self.masked_frames_dir / f"frame_{frame_id:04d}_depth_masked.npy"
+        mask_path = self.masked_frames_dir / f"frame_{frame_id:04d}_mask.png"
+
+        try:
+            # Load masked RGB image
+            rgb = self._load_rgb_png(rgb_path)
+
+            # Load masked depth as numpy array
+            depth = np.load(depth_path).astype(np.uint16)
+
+            # Load mask image
+            mask = self._load_mask_png(mask_path)
+
+            return rgb, depth, mask
+
+        except Exception as e:
+            raise StorageError(f"Failed to load masked frame {frame_id}: {e}") from e
+
+    def _load_mask_png(self, path: Path) -> NDArray[np.uint8]:
+        """Load grayscale mask array from PNG file.
+
+        Args:
+            path: Input path
+
+        Returns:
+            Grayscale mask array (H, W)
+
+        Raises:
+            StorageError: If the file cannot be read or decoded
+        """
+        import struct
+        import zlib
+
+        try:
+            png_data = path.read_bytes()
+        except FileNotFoundError as e:
+            raise StorageError(f"Mask PNG file not found: {path}") from e
+
+        # Verify PNG signature
+        if png_data[:8] != b"\x89PNG\r\n\x1a\n":
+            raise StorageError(f"Invalid PNG signature: {path}")
+
+        # Parse chunks
+        pos = 8
+        width = height = 0
+        idat_data = b""
+
+        while pos < len(png_data):
+            chunk_len = struct.unpack(">I", png_data[pos : pos + 4])[0]
+            chunk_type = png_data[pos + 4 : pos + 8]
+            chunk_data = png_data[pos + 8 : pos + 8 + chunk_len]
+            pos += 12 + chunk_len
+
+            if chunk_type == b"IHDR":
+                width, height = struct.unpack(">II", chunk_data[:8])
+            elif chunk_type == b"IDAT":
+                idat_data += chunk_data
+            elif chunk_type == b"IEND":
+                break
+
+        # Decompress and parse image data
+        raw_data = zlib.decompress(idat_data)
+
+        # Reconstruct grayscale image (assumes filter type 0 = None for each row)
+        mask = np.zeros((height, width), dtype=np.uint8)
+        row_size = 1 + width  # 1 byte filter + pixel data (grayscale)
+
+        for y in range(height):
+            row_start = y * row_size + 1  # Skip filter byte
+            row_data = raw_data[row_start : row_start + width]
+            mask[y] = np.frombuffer(row_data, dtype=np.uint8)
+
+        return mask
+
+    def save_mesh(self, vertices: NDArray[np.float64], triangles: NDArray[np.int64]) -> str:
+        """Save mesh as PLY file.
+
+        Args:
+            vertices: Vertex array (N, 3)
+            triangles: Triangle index array (M, 3)
+
+        Returns:
+            Path to saved mesh file relative to project_dir
+
+        Raises:
+            StorageError: If the save operation fails
+        """
+        recon_dir = self.ensure_subdirectory(self.RECON_DIR)
+        mesh_path = recon_dir / "mesh.ply"
+
+        try:
+            # Write PLY file
+            with mesh_path.open("w") as f:
+                f.write("ply\n")
+                f.write("format ascii 1.0\n")
+                f.write(f"element vertex {len(vertices)}\n")
+                f.write("property float x\n")
+                f.write("property float y\n")
+                f.write("property float z\n")
+                f.write(f"element face {len(triangles)}\n")
+                f.write("property list uchar int vertex_indices\n")
+                f.write("end_header\n")
+
+                # Write vertices
+                for v in vertices:
+                    f.write(f"{v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
+
+                # Write triangles
+                for t in triangles:
+                    f.write(f"3 {t[0]} {t[1]} {t[2]}\n")
+
+            return f"{self.RECON_DIR}/mesh.ply"
+
+        except Exception as e:
+            raise StorageError(f"Failed to save mesh: {e}") from e
+
+    def save_recon_report(self, report: ReconReport) -> None:
+        """Save reconstruction report to file.
+
+        Args:
+            report: ReconReport instance to save
+
+        Raises:
+            StorageError: If the save operation fails
+        """
+        data = report.model_dump(mode="json")
+        save_json_atomic(self.recon_report_path, data)
+
+    def load_recon_report(self) -> ReconReport:
+        """Load reconstruction report from file.
+
+        Returns:
+            ReconReport instance
+
+        Raises:
+            ConfigError: If the report file is missing or invalid
+        """
+        if not self.recon_report_path.exists():
+            raise ConfigError(
+                f"Reconstruction report not found: {self.recon_report_path}"
+            )
+
+        try:
+            data = load_json(self.recon_report_path)
+            return ReconReport.model_validate(data)
+        except StorageError:
+            raise
+        except Exception as e:
+            raise ConfigError(f"Invalid reconstruction report: {e}") from e
