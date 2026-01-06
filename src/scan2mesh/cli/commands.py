@@ -13,6 +13,7 @@ from scan2mesh.cli.display import (
     display_error,
     display_init_result,
     display_not_implemented,
+    display_optimize_result,
     display_plan_result,
     display_preprocess_result,
     display_reconstruct_result,
@@ -314,7 +315,8 @@ def optimize(
     """
     try:
         orchestrator = PipelineOrchestrator(project_dir)
-        orchestrator.run_optimize()
+        metrics, status, suggestions = orchestrator.run_optimize()
+        display_optimize_result(metrics, status, str(project_dir), suggestions)
     except NotImplementedStageError:
         display_not_implemented("optimize")
         raise typer.Exit(1) from None

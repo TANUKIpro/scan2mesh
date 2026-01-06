@@ -9,6 +9,7 @@ from rich.table import Table
 
 from scan2mesh.gates.thresholds import QualityStatus
 from scan2mesh.models import (
+    AssetMetrics,
     CaptureMetrics,
     CapturePlan,
     PreprocessMetrics,
@@ -299,6 +300,77 @@ def display_reconstruct_result(
     table.add_row("  Vertices", f"{report.mesh_vertices:,}")
     table.add_row("  Triangles", f"{report.mesh_triangles:,}")
     table.add_row("  TSDF Voxel Size", f"{report.tsdf_voxel_size * 1000:.1f} mm")
+
+    panel = Panel(table, title=title, border_style=border_style)
+    console.print(panel)
+
+    # Display suggestions if any
+    if suggestions:
+        console.print()
+        console.print("[bold cyan]Suggestions for Improvement:[/bold cyan]")
+        for suggestion in suggestions:
+            console.print(f"  [dim]-[/dim] {suggestion}")
+
+
+def display_optimize_result(
+    metrics: AssetMetrics,
+    status: QualityStatus,
+    project_dir: str,
+    suggestions: list[str] | None = None,
+) -> None:
+    """Display asset optimization result with metrics and quality gate status.
+
+    Args:
+        metrics: Asset metrics from the session
+        status: Quality gate status
+        project_dir: Path to the project directory
+        suggestions: Optional list of improvement suggestions
+    """
+    # Determine panel style based on status
+    if status == QualityStatus.PASS:
+        title = "[bold green]Asset Optimization Completed Successfully[/bold green]"
+        border_style = "green"
+        status_text = "[green]PASS[/green]"
+    elif status == QualityStatus.WARN:
+        title = "[bold yellow]Asset Optimization Completed with Warnings[/bold yellow]"
+        border_style = "yellow"
+        status_text = "[yellow]WARN[/yellow]"
+    else:
+        title = "[bold red]Asset Optimization Completed with Issues[/bold red]"
+        border_style = "red"
+        status_text = "[red]FAIL[/red]"
+
+    # Build metrics table
+    table = Table(show_header=False, box=None)
+    table.add_column("Property", style="cyan")
+    table.add_column("Value", style="white")
+
+    table.add_row("Project Directory", project_dir)
+    table.add_row("Quality Status", status_text)
+    table.add_row("")
+    table.add_row("[bold]LOD Statistics[/bold]", "")
+    for lod in metrics.lod_metrics:
+        table.add_row(
+            f"  LOD{lod.level}",
+            f"{lod.triangles:,} triangles, {lod.vertices:,} vertices, "
+            f"{lod.file_size_bytes / 1024:.1f} KB",
+        )
+    table.add_row("")
+    table.add_row("[bold]Collision Mesh[/bold]", "")
+    table.add_row("  Method", metrics.collision_metrics.method)
+    table.add_row("  Triangles", f"{metrics.collision_metrics.total_triangles:,}")
+    table.add_row("")
+    table.add_row("[bold]Mesh Quality[/bold]", "")
+    table.add_row("  Hole Area Ratio", f"{metrics.hole_area_ratio:.1%}")
+    table.add_row("  Non-manifold Edges", str(metrics.non_manifold_edges))
+    table.add_row("  Scale Uncertainty", metrics.scale_uncertainty)
+    table.add_row("")
+    table.add_row("[bold]Bounding Box (AABB)[/bold]", "")
+    table.add_row(
+        "  Size",
+        f"{metrics.aabb_size[0]:.3f} x {metrics.aabb_size[1]:.3f} x "
+        f"{metrics.aabb_size[2]:.3f} m",
+    )
 
     panel = Panel(table, title=title, border_style=border_style)
     console.print(panel)

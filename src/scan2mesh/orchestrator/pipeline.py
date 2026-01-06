@@ -7,11 +7,13 @@ import logging
 from pathlib import Path
 
 from scan2mesh.exceptions import NotImplementedStageError
+from scan2mesh.gates.asset import AssetQualityGate
 from scan2mesh.gates.capture import CaptureQualityGate
 from scan2mesh.gates.preprocess import PreprocessQualityGate
 from scan2mesh.gates.reconstruct import ReconQualityGate
 from scan2mesh.gates.thresholds import QualityStatus
 from scan2mesh.models import (
+    AssetMetrics,
     CaptureMetrics,
     CapturePlan,
     CapturePlanPreset,
@@ -23,6 +25,7 @@ from scan2mesh.models import (
 )
 from scan2mesh.services import BaseCameraService, StorageService, create_camera_service
 from scan2mesh.stages import (
+    AssetOptimizer,
     CapturePlanner,
     Preprocessor,
     ProjectInitializer,
@@ -287,13 +290,48 @@ class PipelineOrchestrator:
 
         return report_with_status, status, suggestions
 
-    def run_optimize(self) -> None:
+    def run_optimize(self) -> tuple[AssetMetrics, QualityStatus, list[str]]:
         """Run the optimization stage.
 
-        Raises:
-            NotImplementedStageError: This stage is not yet implemented
+        Returns:
+            Tuple of (AssetMetrics, QualityStatus, suggestions)
         """
-        raise NotImplementedStageError("PipelineOrchestrator.run_optimize")
+        logger.info(f"Running optimize stage for project: {self.project_dir}")
+
+        storage = StorageService(self.project_dir)
+
+        # Create and run optimizer
+        optimizer = AssetOptimizer(
+            project_dir=self.project_dir,
+            storage=storage,
+        )
+
+        metrics = optimizer.optimize()
+
+        # Run quality gate
+        gate = AssetQualityGate()
+        status = gate.validate(metrics)
+        suggestions = gate.get_suggestions()
+
+        # Update metrics with gate status
+        metrics_with_status = AssetMetrics(
+            lod_metrics=metrics.lod_metrics,
+            collision_metrics=metrics.collision_metrics,
+            aabb_size=metrics.aabb_size,
+            obb_size=metrics.obb_size,
+            hole_area_ratio=metrics.hole_area_ratio,
+            non_manifold_edges=metrics.non_manifold_edges,
+            texture_resolution=metrics.texture_resolution,
+            texture_coverage=metrics.texture_coverage,
+            scale_uncertainty=metrics.scale_uncertainty,
+            gate_status=status.value,
+            gate_reasons=gate.get_reasons(),
+        )
+
+        # Save updated metrics
+        storage.save_asset_metrics(metrics_with_status)
+
+        return metrics_with_status, status, suggestions
 
     def run_package(self) -> None:
         """Run the packaging stage.

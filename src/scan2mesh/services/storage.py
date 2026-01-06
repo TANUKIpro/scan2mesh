@@ -7,6 +7,7 @@ from numpy.typing import NDArray
 
 from scan2mesh.exceptions import ConfigError, StorageError
 from scan2mesh.models import (
+    AssetMetrics,
     CaptureMetrics,
     CapturePlan,
     FramesMetadata,
@@ -15,6 +16,25 @@ from scan2mesh.models import (
     ReconReport,
 )
 from scan2mesh.utils import load_json, save_json_atomic
+
+
+# Check for Open3D availability
+try:
+    import open3d as o3d
+
+    HAS_OPEN3D = True
+except ImportError:
+    HAS_OPEN3D = False
+    o3d = None
+
+# Check for trimesh availability
+try:
+    import trimesh
+
+    HAS_TRIMESH = True
+except ImportError:
+    HAS_TRIMESH = False
+    trimesh = None
 
 
 class StorageService:
@@ -33,9 +53,11 @@ class StorageService:
     CAPTURE_METRICS_FILE = "capture_metrics.json"
     PREPROCESS_METRICS_FILE = "preprocess_metrics.json"
     RECON_REPORT_FILE = "recon_report.json"
+    ASSET_METRICS_FILE = "asset_metrics.json"
     RAW_FRAMES_DIR = "raw_frames"
     MASKED_FRAMES_DIR = "masked_frames"
     RECON_DIR = "recon"
+    ASSET_DIR = "asset"
 
     def __init__(self, project_dir: Path) -> None:
         """Initialize StorageService.
@@ -89,6 +111,21 @@ class StorageService:
     def recon_dir(self) -> Path:
         """Path to reconstruction directory."""
         return self.project_dir / self.RECON_DIR
+
+    @property
+    def asset_dir(self) -> Path:
+        """Path to asset directory."""
+        return self.project_dir / self.ASSET_DIR
+
+    @property
+    def asset_metrics_path(self) -> Path:
+        """Path to asset metrics file."""
+        return self.project_dir / self.ASSET_METRICS_FILE
+
+    @property
+    def mesh_path(self) -> Path:
+        """Path to reconstructed mesh file."""
+        return self.recon_dir / "mesh.ply"
 
     def save_project_config(self, config: ProjectConfig) -> None:
         """Save project configuration to file.
@@ -738,3 +775,277 @@ class StorageService:
             raise
         except Exception as e:
             raise ConfigError(f"Invalid reconstruction report: {e}") from e
+
+    def load_mesh(self) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+        """Load mesh from PLY file in recon directory.
+
+        Returns:
+            Tuple of (vertices, triangles) numpy arrays
+            - vertices: (N, 3) array of vertex positions
+            - triangles: (M, 3) array of triangle vertex indices
+
+        Raises:
+            StorageError: If the mesh file is missing or cannot be loaded
+        """
+        if not self.mesh_path.exists():
+            raise StorageError(f"Mesh file not found: {self.mesh_path}")
+
+        if HAS_OPEN3D:
+            try:
+                mesh = o3d.io.read_triangle_mesh(str(self.mesh_path))
+                if not mesh.has_vertices():
+                    raise StorageError(f"Mesh has no vertices: {self.mesh_path}")
+                vertices = np.asarray(mesh.vertices).astype(np.float64)
+                triangles = np.asarray(mesh.triangles).astype(np.int64)
+                return vertices, triangles
+            except Exception as e:
+                raise StorageError(f"Failed to load mesh with Open3D: {e}") from e
+        elif HAS_TRIMESH:
+            try:
+                mesh = trimesh.load(str(self.mesh_path))
+                vertices = np.asarray(mesh.vertices).astype(np.float64)
+                triangles = np.asarray(mesh.faces).astype(np.int64)
+                return vertices, triangles
+            except Exception as e:
+                raise StorageError(f"Failed to load mesh with trimesh: {e}") from e
+        else:
+            # Fallback: parse PLY manually
+            return self._load_mesh_ply_manual(self.mesh_path)
+
+    def _load_mesh_ply_manual(
+        self, path: Path
+    ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
+        """Load PLY mesh file manually without external dependencies.
+
+        Args:
+            path: Path to PLY file
+
+        Returns:
+            Tuple of (vertices, triangles) numpy arrays
+
+        Raises:
+            StorageError: If parsing fails
+        """
+        try:
+            with path.open("r") as f:
+                lines = f.readlines()
+
+            # Parse header
+            num_vertices = 0
+            num_faces = 0
+            header_end = 0
+
+            for i, line in enumerate(lines):
+                line = line.strip()
+                if line.startswith("element vertex"):
+                    num_vertices = int(line.split()[-1])
+                elif line.startswith("element face"):
+                    num_faces = int(line.split()[-1])
+                elif line == "end_header":
+                    header_end = i + 1
+                    break
+
+            if num_vertices == 0:
+                raise StorageError("PLY file has no vertices")
+
+            # Parse vertices
+            vertices = np.zeros((num_vertices, 3), dtype=np.float64)
+            for i in range(num_vertices):
+                parts = lines[header_end + i].strip().split()
+                vertices[i] = [float(parts[0]), float(parts[1]), float(parts[2])]
+
+            # Parse faces
+            triangles = np.zeros((num_faces, 3), dtype=np.int64)
+            for i in range(num_faces):
+                parts = lines[header_end + num_vertices + i].strip().split()
+                # First number is face vertex count, followed by indices
+                triangles[i] = [int(parts[1]), int(parts[2]), int(parts[3])]
+
+            return vertices, triangles
+
+        except Exception as e:
+            raise StorageError(f"Failed to parse PLY file: {e}") from e
+
+    def save_asset_mesh(
+        self,
+        vertices: NDArray[np.float64],
+        triangles: NDArray[np.int64],
+        filename: str,
+        file_format: str = "glb",
+    ) -> str:
+        """Save mesh to asset directory in specified format.
+
+        Args:
+            vertices: Vertex array (N, 3)
+            triangles: Triangle index array (M, 3)
+            filename: Output filename (without extension)
+            file_format: Output format ("glb", "obj", "ply")
+
+        Returns:
+            Path to saved mesh file relative to project_dir
+
+        Raises:
+            StorageError: If the save operation fails
+        """
+        asset_dir = self.ensure_subdirectory(self.ASSET_DIR)
+
+        if file_format == "glb":
+            output_path = asset_dir / f"{filename}.glb"
+            self._save_mesh_glb(output_path, vertices, triangles)
+        elif file_format == "obj":
+            output_path = asset_dir / f"{filename}.obj"
+            self._save_mesh_obj(output_path, vertices, triangles)
+        elif file_format == "ply":
+            output_path = asset_dir / f"{filename}.ply"
+            self._save_mesh_ply(output_path, vertices, triangles)
+        else:
+            raise StorageError(f"Unsupported mesh format: {file_format}")
+
+        return f"{self.ASSET_DIR}/{output_path.name}"
+
+    def _save_mesh_glb(
+        self,
+        path: Path,
+        vertices: NDArray[np.float64],
+        triangles: NDArray[np.int64],
+    ) -> None:
+        """Save mesh as GLB file.
+
+        Args:
+            path: Output path
+            vertices: Vertex array (N, 3)
+            triangles: Triangle index array (M, 3)
+
+        Raises:
+            StorageError: If trimesh is not available or save fails
+        """
+        if not HAS_TRIMESH:
+            raise StorageError(
+                "trimesh is required for GLB export. Install with: uv add trimesh"
+            )
+
+        try:
+            mesh = trimesh.Trimesh(vertices=vertices, faces=triangles)
+            mesh.export(str(path), file_type="glb")
+        except Exception as e:
+            raise StorageError(f"Failed to save GLB mesh: {e}") from e
+
+    def _save_mesh_obj(
+        self,
+        path: Path,
+        vertices: NDArray[np.float64],
+        triangles: NDArray[np.int64],
+    ) -> None:
+        """Save mesh as OBJ file.
+
+        Args:
+            path: Output path
+            vertices: Vertex array (N, 3)
+            triangles: Triangle index array (M, 3)
+        """
+        try:
+            with path.open("w") as f:
+                f.write("# OBJ file generated by scan2mesh\n")
+
+                # Write vertices
+                for v in vertices:
+                    f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
+
+                # Write faces (OBJ uses 1-based indices)
+                for t in triangles:
+                    f.write(f"f {t[0] + 1} {t[1] + 1} {t[2] + 1}\n")
+
+        except Exception as e:
+            raise StorageError(f"Failed to save OBJ mesh: {e}") from e
+
+    def _save_mesh_ply(
+        self,
+        path: Path,
+        vertices: NDArray[np.float64],
+        triangles: NDArray[np.int64],
+    ) -> None:
+        """Save mesh as PLY file.
+
+        Args:
+            path: Output path
+            vertices: Vertex array (N, 3)
+            triangles: Triangle index array (M, 3)
+        """
+        try:
+            with path.open("w") as f:
+                f.write("ply\n")
+                f.write("format ascii 1.0\n")
+                f.write(f"element vertex {len(vertices)}\n")
+                f.write("property float x\n")
+                f.write("property float y\n")
+                f.write("property float z\n")
+                f.write(f"element face {len(triangles)}\n")
+                f.write("property list uchar int vertex_indices\n")
+                f.write("end_header\n")
+
+                for v in vertices:
+                    f.write(f"{v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
+
+                for t in triangles:
+                    f.write(f"3 {t[0]} {t[1]} {t[2]}\n")
+
+        except Exception as e:
+            raise StorageError(f"Failed to save PLY mesh: {e}") from e
+
+    def save_preview_image(
+        self,
+        image: NDArray[np.uint8],
+        filename: str = "preview.png",
+    ) -> str:
+        """Save preview image to asset directory.
+
+        Args:
+            image: RGB image array (H, W, 3)
+            filename: Output filename
+
+        Returns:
+            Path to saved image file relative to project_dir
+
+        Raises:
+            StorageError: If the save operation fails
+        """
+        asset_dir = self.ensure_subdirectory(self.ASSET_DIR)
+        output_path = asset_dir / filename
+
+        try:
+            self._save_rgb_png(output_path, image)
+            return f"{self.ASSET_DIR}/{filename}"
+        except Exception as e:
+            raise StorageError(f"Failed to save preview image: {e}") from e
+
+    def save_asset_metrics(self, metrics: AssetMetrics) -> None:
+        """Save asset metrics to file.
+
+        Args:
+            metrics: AssetMetrics instance to save
+
+        Raises:
+            StorageError: If the save operation fails
+        """
+        data = metrics.model_dump(mode="json")
+        save_json_atomic(self.asset_metrics_path, data)
+
+    def load_asset_metrics(self) -> AssetMetrics:
+        """Load asset metrics from file.
+
+        Returns:
+            AssetMetrics instance
+
+        Raises:
+            ConfigError: If the metrics file is missing or invalid
+        """
+        if not self.asset_metrics_path.exists():
+            raise ConfigError(f"Asset metrics not found: {self.asset_metrics_path}")
+
+        try:
+            data = load_json(self.asset_metrics_path)
+            return AssetMetrics.model_validate(data)
+        except StorageError:
+            raise
+        except Exception as e:
+            raise ConfigError(f"Invalid asset metrics: {e}") from e
