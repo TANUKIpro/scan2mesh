@@ -7,6 +7,7 @@ from numpy.typing import NDArray
 
 from scan2mesh.exceptions import ConfigError, StorageError
 from scan2mesh.models import (
+    AssetManifest,
     AssetMetrics,
     CaptureMetrics,
     CapturePlan,
@@ -54,10 +55,12 @@ class StorageService:
     PREPROCESS_METRICS_FILE = "preprocess_metrics.json"
     RECON_REPORT_FILE = "recon_report.json"
     ASSET_METRICS_FILE = "asset_metrics.json"
+    MANIFEST_FILE = "manifest.json"
     RAW_FRAMES_DIR = "raw_frames"
     MASKED_FRAMES_DIR = "masked_frames"
     RECON_DIR = "recon"
     ASSET_DIR = "asset"
+    OUTPUT_DIR = "output"
 
     def __init__(self, project_dir: Path) -> None:
         """Initialize StorageService.
@@ -118,9 +121,19 @@ class StorageService:
         return self.project_dir / self.ASSET_DIR
 
     @property
+    def output_dir(self) -> Path:
+        """Path to output directory for packaged assets."""
+        return self.project_dir / self.OUTPUT_DIR
+
+    @property
     def asset_metrics_path(self) -> Path:
         """Path to asset metrics file."""
         return self.project_dir / self.ASSET_METRICS_FILE
+
+    @property
+    def manifest_path(self) -> Path:
+        """Path to manifest file in output directory."""
+        return self.output_dir / self.MANIFEST_FILE
 
     @property
     def mesh_path(self) -> Path:
@@ -1049,3 +1062,37 @@ class StorageService:
             raise
         except Exception as e:
             raise ConfigError(f"Invalid asset metrics: {e}") from e
+
+    def save_manifest(self, manifest: AssetManifest) -> None:
+        """Save asset manifest to output directory.
+
+        Args:
+            manifest: AssetManifest instance to save
+
+        Raises:
+            StorageError: If the save operation fails
+        """
+        # Ensure output directory exists
+        self.ensure_subdirectory(self.OUTPUT_DIR)
+        data = manifest.model_dump(mode="json")
+        save_json_atomic(self.manifest_path, data)
+
+    def load_manifest(self) -> AssetManifest:
+        """Load asset manifest from output directory.
+
+        Returns:
+            AssetManifest instance
+
+        Raises:
+            ConfigError: If the manifest file is missing or invalid
+        """
+        if not self.manifest_path.exists():
+            raise ConfigError(f"Manifest not found: {self.manifest_path}")
+
+        try:
+            data = load_json(self.manifest_path)
+            return AssetManifest.model_validate(data)
+        except StorageError:
+            raise
+        except Exception as e:
+            raise ConfigError(f"Invalid manifest: {e}") from e

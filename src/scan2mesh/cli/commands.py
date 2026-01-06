@@ -14,6 +14,7 @@ from scan2mesh.cli.display import (
     display_init_result,
     display_not_implemented,
     display_optimize_result,
+    display_package_result,
     display_plan_result,
     display_preprocess_result,
     display_reconstruct_result,
@@ -333,11 +334,12 @@ def package(
 ) -> None:
     """Package optimized assets for distribution.
 
-    Exports GLB/GLTF and creates asset manifest.
+    Creates asset manifest, bundle structure, and ZIP archive.
     """
     try:
         orchestrator = PipelineOrchestrator(project_dir)
-        orchestrator.run_package()
+        result = orchestrator.run_package()
+        display_package_result(result, str(project_dir))
     except NotImplementedStageError:
         display_not_implemented("package")
         raise typer.Exit(1) from None

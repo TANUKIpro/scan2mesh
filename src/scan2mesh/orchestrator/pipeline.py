@@ -19,6 +19,7 @@ from scan2mesh.models import (
     CapturePlanPreset,
     MaskMethod,
     OutputPreset,
+    PackageResult,
     PreprocessMetrics,
     ProjectConfig,
     ReconReport,
@@ -27,6 +28,7 @@ from scan2mesh.services import BaseCameraService, StorageService, create_camera_
 from scan2mesh.stages import (
     AssetOptimizer,
     CapturePlanner,
+    Packager,
     Preprocessor,
     ProjectInitializer,
     Reconstructor,
@@ -333,13 +335,27 @@ class PipelineOrchestrator:
 
         return metrics_with_status, status, suggestions
 
-    def run_package(self) -> None:
+    def run_package(self) -> PackageResult:
         """Run the packaging stage.
 
-        Raises:
-            NotImplementedStageError: This stage is not yet implemented
+        Creates asset manifest, bundle structure, and ZIP archive.
+
+        Returns:
+            PackageResult with paths and metadata
         """
-        raise NotImplementedStageError("PipelineOrchestrator.run_package")
+        logger.info(f"Running package stage for project: {self.project_dir}")
+
+        storage = StorageService(self.project_dir)
+
+        # Create and run packager
+        packager = Packager(
+            project_dir=self.project_dir,
+            storage=storage,
+        )
+
+        result = packager.package()
+
+        return result
 
     def run_report(self) -> None:
         """Run the reporting stage.

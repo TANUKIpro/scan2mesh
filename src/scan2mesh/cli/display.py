@@ -12,6 +12,7 @@ from scan2mesh.models import (
     AssetMetrics,
     CaptureMetrics,
     CapturePlan,
+    PackageResult,
     PreprocessMetrics,
     ProjectConfig,
     ReconReport,
@@ -381,3 +382,36 @@ def display_optimize_result(
         console.print("[bold cyan]Suggestions for Improvement:[/bold cyan]")
         for suggestion in suggestions:
             console.print(f"  [dim]-[/dim] {suggestion}")
+
+
+def display_package_result(
+    result: PackageResult,
+    project_dir: str,
+) -> None:
+    """Display packaging result.
+
+    Args:
+        result: Package result from the session
+        project_dir: Path to the project directory
+    """
+    title = "[bold green]Packaging Completed Successfully[/bold green]"
+    border_style = "green"
+
+    # Build result table
+    table = Table(show_header=False, box=None)
+    table.add_column("Property", style="cyan")
+    table.add_column("Value", style="white")
+
+    table.add_row("Project Directory", project_dir)
+    table.add_row("")
+    table.add_row("[bold]Output[/bold]", "")
+    table.add_row("  Archive Path", result.archive_path)
+    table.add_row("  Output Directory", result.output_dir)
+    table.add_row("  Archive Size", f"{result.total_size_bytes / 1024:.1f} KB")
+    table.add_row("")
+    table.add_row("[bold]Files Included[/bold]", "")
+    for file_name in result.files_included:
+        table.add_row("  ", file_name)
+
+    panel = Panel(table, title=title, border_style=border_style)
+    console.print(panel)
