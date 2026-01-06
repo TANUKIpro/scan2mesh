@@ -5,6 +5,7 @@ import streamlit as st
 from scan2mesh_gui.components.sidebar import render_sidebar
 from scan2mesh_gui.config import get_config_manager
 from scan2mesh_gui.services.device_service import DeviceService
+from scan2mesh_gui.services.object_service import ObjectService
 from scan2mesh_gui.services.profile_service import ProfileService
 
 
@@ -17,7 +18,9 @@ def init_session_state() -> None:
         "selected_object": None,
         "object_count": 0,
         "status_counts": {},
+        "stage_counts": {},
         "recent_objects": [],
+        "all_objects": [],
         "realsense_connected": False,
         "realsense_device": None,
         "gpu_available": False,
@@ -37,6 +40,22 @@ def load_initial_data() -> None:
     profile_service = ProfileService(config.profiles_dir)
     st.session_state.profiles = profile_service.list_profiles()
 
+    # Load dashboard data - all objects across all profiles
+    profile_ids = [p.id for p in st.session_state.profiles]
+    object_service = ObjectService(config.profiles_dir, config.projects_dir)
+
+    # Get all objects (for recent scans list)
+    all_objects = object_service.list_all_objects(profile_ids)
+    st.session_state.all_objects = all_objects
+    st.session_state.recent_objects = all_objects[:10]  # Most recent 10
+    st.session_state.object_count = len(all_objects)
+
+    # Get status counts (PASS/WARN/FAIL/PENDING)
+    st.session_state.status_counts = object_service.get_all_status_counts(profile_ids)
+
+    # Get stage counts (Init/Plan/Capture/...)
+    st.session_state.stage_counts = object_service.get_stage_counts(profile_ids)
+
     # Check device status
     device_service = DeviceService()
     devices = device_service.list_devices()
@@ -47,6 +66,7 @@ def load_initial_data() -> None:
     # Check GPU availability (simplified check)
     try:
         import subprocess
+
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
             capture_output=True,
@@ -117,6 +137,7 @@ def main() -> None:
 
 def render_page(page: str) -> None:
     """Render the appropriate page based on navigation."""
+    from scan2mesh_gui.pages.capture_plan import render_capture_plan
     from scan2mesh_gui.pages.dashboard import render_dashboard
     from scan2mesh_gui.pages.devices import render_devices
     from scan2mesh_gui.pages.profiles import render_profiles
@@ -129,11 +150,11 @@ def render_page(page: str) -> None:
         "registry": render_registry,
         "devices": render_devices,
         "settings": render_settings,
+        "capture_plan": render_capture_plan,
     }
 
-    # Pipeline pages (placeholders)
+    # Pipeline pages (placeholders) - capture_plan is now implemented
     pipeline_pages = [
-        "capture_plan",
         "capture",
         "preprocess",
         "reconstruct",
@@ -186,10 +207,11 @@ def render_pipeline_placeholder(page: str) -> None:
                 "report": "dashboard",
             }
             next_page = next_pages.get(page)
-            if next_page:
-                if st.button(f"Next: {page_titles.get(next_page, next_page).capitalize()}"):
-                    st.session_state.navigate_to = next_page
-                    st.rerun()
+            if next_page and st.button(
+                f"Next: {page_titles.get(next_page, next_page).capitalize()}"
+            ):
+                st.session_state.navigate_to = next_page
+                st.rerun()
     else:
         st.warning("No object selected. Please select an object from the Registry.")
         if st.button("Go to Registry"):

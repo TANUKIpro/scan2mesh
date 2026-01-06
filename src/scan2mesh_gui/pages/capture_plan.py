@@ -1,9 +1,13 @@
 """Capture Plan page - plan scanning coverage."""
 
+from pathlib import Path
+
 import streamlit as st
 
 from scan2mesh_gui.config import get_config_manager
+from scan2mesh_gui.models.capture_plan import CapturePlanPreset
 from scan2mesh_gui.models.scan_object import PipelineStage
+from scan2mesh_gui.services.capture_plan_service import CapturePlanService
 from scan2mesh_gui.services.pipeline_service import PipelineService
 
 
@@ -24,6 +28,7 @@ def render_capture_plan() -> None:
 
     config = get_config_manager()
     pipeline = PipelineService(config.projects_dir)
+    capture_service = CapturePlanService(config.projects_dir)
 
     # Object info card
     with st.container():
@@ -36,7 +41,10 @@ def render_capture_plan() -> None:
             st.text(f"Class ID: {selected_object.class_id}")
 
             if selected_object.known_dimension_mm:
-                st.text(f"Known Dimension: {selected_object.known_dimension_mm} mm ({selected_object.dimension_type})")
+                st.text(
+                    f"Known Dimension: {selected_object.known_dimension_mm} mm "
+                    f"({selected_object.dimension_type})"
+                )
 
         with col2:
             st.markdown("**Status**")
@@ -48,45 +56,55 @@ def render_capture_plan() -> None:
     # Capture preset selection
     st.subheader("Capture Preset")
 
-    preset = st.selectbox(
+    # Map preset names to enum values
+    preset_options = [
+        CapturePlanPreset.STANDARD,
+        CapturePlanPreset.HIGH_QUALITY,
+        CapturePlanPreset.QUICK,
+    ]
+
+    def format_preset(p: CapturePlanPreset) -> str:
+        info = capture_service.get_preset_info(p)
+        return {
+            CapturePlanPreset.STANDARD: f"Standard ({info['keyframes']} keyframes, balanced)",
+            CapturePlanPreset.HIGH_QUALITY: f"High Quality ({info['keyframes']} keyframes, detailed)",
+            CapturePlanPreset.QUICK: f"Quick ({info['keyframes']} keyframes, fast)",
+        }.get(p, p.value)
+
+    selected_preset = st.selectbox(
         "Select Preset",
-        ["standard", "high_quality", "quick"],
-        format_func=lambda x: {
-            "standard": "Standard (36 keyframes, balanced)",
-            "high_quality": "High Quality (72 keyframes, detailed)",
-            "quick": "Quick (18 keyframes, fast)",
-        }.get(x, x),
+        preset_options,
+        format_func=format_preset,
     )
 
-    # Preset details
-    preset_info = {
-        "standard": {
-            "keyframes": 36,
-            "description": "Balanced coverage with 6 elevation levels x 6 azimuth positions",
-            "time_estimate": "3-5 minutes",
-        },
-        "high_quality": {
-            "keyframes": 72,
-            "description": "Detailed coverage with 12 elevation levels x 6 azimuth positions",
-            "time_estimate": "6-10 minutes",
-        },
-        "quick": {
-            "keyframes": 18,
-            "description": "Fast capture with 3 elevation levels x 6 azimuth positions",
-            "time_estimate": "1-2 minutes",
-        },
+    # Get preset info from service
+    preset_info = capture_service.get_preset_info(selected_preset)
+
+    # Preset descriptions
+    preset_descriptions = {
+        CapturePlanPreset.STANDARD: (
+            f"Balanced coverage with {preset_info['elevation_levels']} elevation levels "
+            f"x {preset_info['azimuth_positions']} azimuth positions"
+        ),
+        CapturePlanPreset.HIGH_QUALITY: (
+            f"Detailed coverage with {preset_info['elevation_levels']} elevation levels "
+            f"x {preset_info['azimuth_positions']} azimuth positions"
+        ),
+        CapturePlanPreset.QUICK: (
+            f"Fast capture with {preset_info['elevation_levels']} elevation levels "
+            f"x {preset_info['azimuth_positions']} azimuth positions"
+        ),
     }
 
-    info = preset_info[preset]
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Target Keyframes", info["keyframes"])
+        st.metric("Target Keyframes", preset_info["keyframes"])
     with col2:
-        st.metric("Est. Time", info["time_estimate"])
+        st.metric("Est. Time", preset_info["time_estimate"])
     with col3:
         st.metric("Coverage", "360°")
 
-    st.caption(info["description"])
+    st.caption(preset_descriptions.get(selected_preset, ""))
 
     st.divider()
 
@@ -99,7 +117,8 @@ def render_capture_plan() -> None:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("""
+        st.markdown(
+            """
         ```
               TOP (6 shots)
                   ○ ○ ○
@@ -112,18 +131,13 @@ def render_capture_plan() -> None:
                   ○ ○ ○
              BOTTOM (6 shots)
         ```
-        """)
+        """
+        )
         st.caption("● = Object center, ○ = Camera positions")
 
     with col2:
         st.markdown("**Elevation Levels**")
-        if preset == "standard":
-            elevations = [0, 30, 60, 90, 120, 150]
-        elif preset == "high_quality":
-            elevations = [0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165]
-        else:
-            elevations = [0, 60, 120]
-
+        elevations = CapturePlanService.get_elevation_angles(selected_preset)
         for elev in elevations:
             st.text(f"• {elev}° elevation")
 
@@ -138,8 +152,9 @@ def render_capture_plan() -> None:
                 "Azimuth Positions",
                 min_value=4,
                 max_value=12,
-                value=6,
+                value=preset_info["azimuth_positions"],
                 help="Number of positions around the object",
+                disabled=True,  # Read-only for now
             )
 
             st.number_input(
@@ -155,8 +170,9 @@ def render_capture_plan() -> None:
                 "Elevation Levels",
                 min_value=2,
                 max_value=12,
-                value=6 if preset == "standard" else (12 if preset == "high_quality" else 3),
+                value=preset_info["elevation_levels"],
                 help="Number of vertical levels",
+                disabled=True,  # Read-only for now
             )
 
             st.slider(
@@ -188,13 +204,28 @@ def render_capture_plan() -> None:
                     project_path = pipeline.init_project(selected_object)
                     selected_object.project_path = str(project_path)
 
-            # Generate capture plan
+            # Generate capture plan using CapturePlanService
             with st.spinner("Generating capture plan..."):
-                plan = pipeline.generate_plan(
-                    selected_object.project_path,
-                    preset=preset,
+                plan = capture_service.generate_plan(
+                    preset=selected_preset,
+                    object_id=selected_object.id,
                 )
-                st.session_state.capture_plan = plan
+
+                # Save to session state (as dict for compatibility)
+                st.session_state.capture_plan = {
+                    "preset": plan.preset.value,
+                    "viewpoints": plan.num_viewpoints,
+                    "target_keyframes": plan.num_viewpoints,
+                    "min_required_frames": plan.min_required_frames,
+                    "recommended_distance_m": plan.recommended_distance_m,
+                    "notes": plan.notes,
+                }
+
+                # Save to project directory
+                if selected_object.project_path:
+                    capture_service.save_plan(
+                        plan, Path(selected_object.project_path)
+                    )
 
             # Update stage
             selected_object.current_stage = PipelineStage.PLAN
