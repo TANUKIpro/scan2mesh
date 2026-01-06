@@ -15,7 +15,7 @@ except ImportError:
 
 
 def render_mesh_viewer(
-    mesh_path: Path,
+    mesh_path: Path | str,
     height: int = 400,
     show_edges: bool = False,
 ) -> None:
@@ -29,6 +29,10 @@ def render_mesh_viewer(
     if not PYVISTA_AVAILABLE:
         st.warning("PyVista is not installed. Install with: pip install pyvista stpyvista")
         return
+
+    # Convert string to Path if needed
+    if isinstance(mesh_path, str):
+        mesh_path = Path(mesh_path)
 
     if not mesh_path.exists():
         st.error(f"Mesh file not found: {mesh_path}")
@@ -114,7 +118,7 @@ def render_lod_comparison(
 
     cols = st.columns(len(lod_paths))
 
-    for i, (col, path) in enumerate(zip(cols, lod_paths)):
+    for i, (col, path) in enumerate(zip(cols, lod_paths, strict=True)):
         with col:
             st.markdown(f"**LOD{i}**")
             if path.exists():

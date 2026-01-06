@@ -14,7 +14,7 @@ def render_report() -> None:
     selected_object = st.session_state.get("selected_object")
     if not selected_object:
         st.warning("Please select an object first")
-        if st.button("Go to Registry"):
+        if st.button("Go to Registry", key="report_go_registry"):
             st.session_state.navigate_to = "registry"
             st.rerun()
         return

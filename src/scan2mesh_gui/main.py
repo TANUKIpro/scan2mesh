@@ -142,6 +142,7 @@ def render_page(page: str) -> None:
     from scan2mesh_gui.pages.dashboard import render_dashboard
     from scan2mesh_gui.pages.devices import render_devices
     from scan2mesh_gui.pages.optimize import render_optimize
+    from scan2mesh_gui.pages.package import render_package
     from scan2mesh_gui.pages.preprocess import render_preprocess
     from scan2mesh_gui.pages.profiles import render_profiles
     from scan2mesh_gui.pages.reconstruct import render_reconstruct
@@ -159,11 +160,11 @@ def render_page(page: str) -> None:
         "preprocess": render_preprocess,
         "reconstruct": render_reconstruct,
         "optimize": render_optimize,
+        "package": render_package,
     }
 
-    # Pipeline pages (placeholders) - capture_plan through optimize are now implemented
+    # Pipeline pages (placeholders) - capture_plan through package are now implemented
     pipeline_pages = [
-        "package",
         "report",
     ]
 

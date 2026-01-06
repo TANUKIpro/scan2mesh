@@ -26,6 +26,12 @@ from scan2mesh_gui.models.optimize_session import (
     OptimizeSession,
     OptimizeStage,
 )
+from scan2mesh_gui.models.package_session import (
+    PackageConfig,
+    PackageMetrics,
+    PackageSession,
+    PackageStage,
+)
 from scan2mesh_gui.models.reconstruct_session import (
     ReconstructMetrics,
     ReconstructSession,
@@ -50,6 +56,10 @@ __all__ = [
     "OptimizeMetrics",
     "OptimizeSession",
     "OptimizeStage",
+    "PackageConfig",
+    "PackageMetrics",
+    "PackageSession",
+    "PackageStage",
     "PipelineStage",
     "PreprocessMetrics",
     "PreprocessSession",

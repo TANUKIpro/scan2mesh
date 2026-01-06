@@ -19,7 +19,7 @@ def render_capture_plan() -> None:
     selected_object = st.session_state.get("selected_object")
     if not selected_object:
         st.warning("Please select an object first")
-        if st.button("Go to Registry"):
+        if st.button("Go to Registry", key="capture_plan_go_registry"):
             st.session_state.navigate_to = "registry"
             st.rerun()
         return
