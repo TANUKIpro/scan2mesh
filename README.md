@@ -22,7 +22,7 @@ scan2meshは、Intel RealSenseカメラを用いた3Dスキャンから、シミ
 |-------|-----------|----------|------|
 | 0 | init | ✅ 完全実装 | プロジェクト初期化 |
 | 1 | plan | ✅ 完全実装 | 撮影計画生成 |
-| 2 | capture | 🚧 スタブのみ | RGBDフレーム取得 |
+| 2 | capture | ✅ 完全実装 | RGBDフレーム取得 |
 | 3 | preprocess | 🚧 スタブのみ | 前処理・背景除去 |
 | 4 | reconstruct | 🚧 スタブのみ | 3D復元 |
 | 5 | optimize | 🚧 スタブのみ | アセット最適化 |
@@ -34,7 +34,7 @@ scan2meshは、Intel RealSenseカメラを用いた3Dスキャンから、シミ
 | フェーズ | 内容 | ステータス |
 |---------|------|----------|
 | Phase 1 | init, plan の完全実装 | ✅ 完了 |
-| Phase 2 | capture, preprocess の実装 | 📋 予定 |
+| Phase 2 | capture, preprocess の実装 | 🚧 進行中 (capture完了) |
 | Phase 3 | reconstruct, optimize の実装 | 📋 予定 |
 | Phase 4 | package, report の実装 | 📋 予定 |
 | Phase 5 | Docker環境の整備 | 📋 予定 |
@@ -55,7 +55,7 @@ graph LR
 
     style A fill:#90EE90
     style B fill:#90EE90
-    style C fill:#FFE4B5
+    style C fill:#90EE90
     style D fill:#FFE4B5
     style E fill:#FFE4B5
     style F fill:#FFE4B5
@@ -96,15 +96,26 @@ graph LR
   - 撮影順序
   - 撮影時の注意事項
 
-### Stage 2: RGBDフレーム取得 (capture) 🚧
+### Stage 2: RGBDフレーム取得 (capture) ✅
 
 RealSenseカメラからRGB-Dデータを取得します。
 
-**予定機能**:
+**機能**:
 - RealSenseストリームの取得（RGB、Depth、intrinsics）
-- リアルタイム品質監視（深度有効率、ブラースコア、カバレッジ）
-- キーフレームの自動選別
-- 品質ゲートによるWARN/FAIL判定
+- リアルタイム品質評価（ブラースコア、深度有効率、オブジェクト占有率）
+- キーフレームの自動選別（品質基準に基づく）
+- 視点カバレッジの推定
+- 品質ゲートによるPASS/WARN/FAIL判定
+- モックカメラによる開発・テスト対応
+
+**品質評価基準**:
+- ブラースコア: Laplacian分散による鮮鋭度評価
+- 深度有効率: 有効な深度ピクセルの割合
+- オブジェクト占有率: 対象物体の画像内占有割合
+
+**出力**:
+- `raw_frames/`: RGB画像（PNG）と深度データ（.npy）
+- `metrics/capture_metrics.json`: キャプチャメトリクス
 
 ### Stage 3: 前処理 (preprocess) 🚧
 
@@ -260,15 +271,27 @@ uv run scan2mesh plan ./projects/robocup_ball --preset standard
 }
 ```
 
+### 3. RGBDフレームの取得
+
+撮影計画に基づいてRGB-Dフレームを取得します。
+
+```bash
+# モックカメラで30フレーム取得（開発・テスト用）
+uv run scan2mesh capture ./projects/robocup_ball --mock --num-frames 30
+
+# RealSenseカメラで取得（実機が必要）
+uv run scan2mesh capture ./projects/robocup_ball --num-frames 50
+```
+
 ### 次のステップ
 
-現在実装済みの機能は `init` と `plan` のみです。
-Stage 2 (capture) 以降は開発中のため、以下のコマンドは `NotImplementedError` を発生させます:
+現在実装済みの機能は `init`, `plan`, `capture` です。
+Stage 3 (preprocess) 以降は開発中のため、以下のコマンドは `NotImplementedError` を発生させます:
 
 ```bash
 # これらは現在動作しません
-uv run scan2mesh capture ./projects/robocup_ball
 uv run scan2mesh preprocess ./projects/robocup_ball
+uv run scan2mesh reconstruct ./projects/robocup_ball
 ```
 
 ## コマンドリファレンス
@@ -355,13 +378,57 @@ uv run scan2mesh plan ./projects/ball --preset quick
 uv run scan2mesh plan ./projects/complex_object --preset hard
 ```
 
+### scan2mesh capture
+
+RGBDフレームを取得します。
+
+**構文**:
+```bash
+scan2mesh capture PROJECT_DIR [OPTIONS]
+```
+
+**引数**:
+
+| 引数 | 型 | 説明 |
+|------|-----|------|
+| `PROJECT_DIR` | PATH | プロジェクトディレクトリのパス |
+
+**オプション**:
+
+| オプション | 短縮形 | 型 | デフォルト | 説明 |
+|-----------|--------|-----|----------|------|
+| `--num-frames` | `-n` | INTEGER | 30 | 取得するフレーム数 |
+| `--mock` | - | BOOLEAN | False | モックカメラを使用（開発・テスト用） |
+
+**品質ゲート**:
+
+取得したフレームは自動的に品質評価され、以下の判定が行われます:
+
+| 判定 | 説明 |
+|------|------|
+| PASS | 品質基準を満たしている |
+| WARN | 品質基準を下回るが使用可能 |
+| FAIL | 品質基準を大幅に下回り、再撮影推奨 |
+
+**使用例**:
+
+```bash
+# モックカメラで30フレーム取得（開発用）
+uv run scan2mesh capture ./projects/ball --mock
+
+# 50フレーム取得
+uv run scan2mesh capture ./projects/ball --num-frames 50
+
+# RealSenseカメラで取得
+uv run scan2mesh capture ./projects/ball
+```
+
 ### 未実装コマンド
 
 以下のコマンドは現在開発中です（スタブのみ実装）:
 
 | コマンド | 説明 |
 |---------|------|
-| `scan2mesh capture PROJECT_DIR` | RGBDフレームの取得 |
 | `scan2mesh preprocess PROJECT_DIR` | 前処理の実行 |
 | `scan2mesh reconstruct PROJECT_DIR` | 3D復元の実行 |
 | `scan2mesh optimize PROJECT_DIR` | アセット最適化の実行 |
@@ -400,7 +467,7 @@ scan2mesh/
 │   ├── stages/               # 処理ステージ
 │   │   ├── init.py           # ✅ ProjectInitializer
 │   │   ├── plan.py           # ✅ CapturePlanner
-│   │   ├── capture.py        # 🚧 RGBDCapture (stub)
+│   │   ├── capture.py        # ✅ RGBDCapture
 │   │   ├── preprocess.py     # 🚧 Preprocessor (stub)
 │   │   ├── reconstruct.py    # 🚧 Reconstructor (stub)
 │   │   ├── optimize.py       # 🚧 AssetOptimizer (stub)

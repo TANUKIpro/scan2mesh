@@ -11,6 +11,8 @@ from scan2mesh.models.capture import (
     CapturePlanPreset,
     FrameData,
     FrameQuality,
+    FramesMetadata,
+    RawFrame,
     ViewPoint,
 )
 from scan2mesh.models.config import (
@@ -41,6 +43,7 @@ __all__ = [
     "FileReferences",
     "FrameData",
     "FrameQuality",
+    "FramesMetadata",
     "LODMetrics",
     "MaskMethod",
     "MaskedFrame",
@@ -49,6 +52,7 @@ __all__ = [
     "ProjectConfig",
     "Provenance",
     "QualityStatus",
+    "RawFrame",
     "ReconReport",
     "ScaleInfo",
     "ViewPoint",

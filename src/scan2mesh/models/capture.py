@@ -7,6 +7,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
+import numpy as np
+from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
 
@@ -152,3 +154,52 @@ class CaptureMetrics(BaseModel):
     gate_reasons: list[str] = Field(default_factory=list)
 
     model_config = {"frozen": True}
+
+
+class RawFrame:
+    """Raw frame data from camera.
+
+    This is a non-Pydantic class to hold numpy arrays efficiently.
+
+    Attributes:
+        rgb: RGB image as numpy array (H, W, 3), uint8
+        depth: Depth image as numpy array (H, W), uint16 (mm)
+        timestamp: Capture timestamp
+        intrinsics: Camera intrinsic parameters
+    """
+
+    __slots__ = ("depth", "intrinsics", "rgb", "timestamp")
+
+    def __init__(
+        self,
+        rgb: NDArray[np.uint8],
+        depth: NDArray[np.uint16],
+        timestamp: datetime,
+        intrinsics: CameraIntrinsics,
+    ) -> None:
+        """Initialize RawFrame.
+
+        Args:
+            rgb: RGB image as numpy array (H, W, 3)
+            depth: Depth image as numpy array (H, W)
+            timestamp: Capture timestamp
+            intrinsics: Camera intrinsic parameters
+        """
+        self.rgb = rgb
+        self.depth = depth
+        self.timestamp = timestamp
+        self.intrinsics = intrinsics
+
+
+class FramesMetadata(BaseModel):
+    """Metadata for all captured frames.
+
+    Attributes:
+        frames: List of frame data
+        total_frames: Total number of frames captured
+        keyframe_ids: List of frame IDs selected as keyframes
+    """
+
+    frames: list[FrameData] = Field(default_factory=list)
+    total_frames: int = Field(default=0)
+    keyframe_ids: list[int] = Field(default_factory=list)

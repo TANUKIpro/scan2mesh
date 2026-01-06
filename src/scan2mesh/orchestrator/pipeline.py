@@ -7,8 +7,17 @@ import logging
 from pathlib import Path
 
 from scan2mesh.exceptions import NotImplementedStageError
-from scan2mesh.models import CapturePlan, CapturePlanPreset, OutputPreset, ProjectConfig
-from scan2mesh.stages import CapturePlanner, ProjectInitializer
+from scan2mesh.gates.capture import CaptureQualityGate
+from scan2mesh.gates.thresholds import QualityStatus
+from scan2mesh.models import (
+    CaptureMetrics,
+    CapturePlan,
+    CapturePlanPreset,
+    OutputPreset,
+    ProjectConfig,
+)
+from scan2mesh.services import BaseCameraService, StorageService, create_camera_service
+from scan2mesh.stages import CapturePlanner, ProjectInitializer, RGBDCapture
 
 
 logger = logging.getLogger("scan2mesh.orchestrator.pipeline")
@@ -84,13 +93,82 @@ class PipelineOrchestrator:
         planner = CapturePlanner(self.project_dir)
         return planner.generate_plan(preset)
 
-    def run_capture(self) -> None:
+    def run_capture(
+        self,
+        num_frames: int = 30,
+        use_mock: bool = False,
+        camera: BaseCameraService | None = None,
+    ) -> tuple[CaptureMetrics, QualityStatus, list[str]]:
         """Run the capture stage.
 
-        Raises:
-            NotImplementedStageError: This stage is not yet implemented
+        Args:
+            num_frames: Number of frames to capture
+            use_mock: If True, use mock camera for testing
+            camera: Optional pre-configured camera service
+
+        Returns:
+            Tuple of (CaptureMetrics, QualityStatus, suggestions)
         """
-        raise NotImplementedStageError("PipelineOrchestrator.run_capture")
+        logger.info(f"Running capture stage for project: {self.project_dir}")
+
+        # Load capture plan if available
+        storage = StorageService(self.project_dir)
+        try:
+            capture_plan = storage.load_capture_plan()
+        except Exception:
+            capture_plan = None
+
+        # Create camera service if not provided
+        if camera is None:
+            camera = create_camera_service(use_mock=use_mock)
+
+        # Create and run capture stage
+        capture_stage = RGBDCapture(
+            project_dir=self.project_dir,
+            camera=camera,
+            storage=storage,
+        )
+
+        capture_stage.start_capture(plan=capture_plan)
+
+        try:
+            # Capture frames
+            for _ in range(num_frames):
+                capture_stage.capture_frame()
+
+            # Stop capture and get metrics
+            metrics = capture_stage.stop_capture()
+        except Exception:
+            # Ensure we stop capturing on error
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                capture_stage.stop_capture()
+            raise
+
+        # Run quality gate
+        gate = CaptureQualityGate()
+        status = gate.validate(metrics)
+        suggestions = gate.get_suggestions()
+
+        # Update metrics with gate status
+        metrics_with_status = CaptureMetrics(
+            num_frames_raw=metrics.num_frames_raw,
+            num_keyframes=metrics.num_keyframes,
+            depth_valid_ratio_mean=metrics.depth_valid_ratio_mean,
+            depth_valid_ratio_min=metrics.depth_valid_ratio_min,
+            blur_score_mean=metrics.blur_score_mean,
+            blur_score_min=metrics.blur_score_min,
+            coverage_score=metrics.coverage_score,
+            capture_duration_sec=metrics.capture_duration_sec,
+            gate_status=status.value,
+            gate_reasons=gate._reasons,
+        )
+
+        # Save updated metrics
+        storage.save_capture_metrics(metrics_with_status)
+
+        return metrics_with_status, status, suggestions
 
     def run_preprocess(self) -> None:
         """Run the preprocessing stage.

@@ -4,6 +4,7 @@ Exception hierarchy:
     Scan2MeshError
     ├── ConfigError
     ├── CameraError
+    ├── CaptureError
     ├── PipelineError
     │   └── QualityGateError
     ├── StorageError
@@ -38,6 +39,18 @@ class CameraError(Scan2MeshError):
     - RealSense camera is not connected
     - Camera stream acquisition fails
     - Camera initialization fails
+    """
+
+    pass
+
+
+class CaptureError(Scan2MeshError):
+    """Capture related errors.
+
+    Raised when:
+    - Capture session fails to start or stop
+    - Frame capture fails
+    - Capture state is invalid
     """
 
     pass

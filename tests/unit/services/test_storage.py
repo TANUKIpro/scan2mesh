@@ -3,10 +3,21 @@
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from scan2mesh.exceptions import ConfigError
-from scan2mesh.models import CapturePlan, CapturePlanPreset, ProjectConfig, ViewPoint
+from scan2mesh.models import (
+    CameraIntrinsics,
+    CaptureMetrics,
+    CapturePlan,
+    CapturePlanPreset,
+    FrameData,
+    FrameQuality,
+    FramesMetadata,
+    ProjectConfig,
+    ViewPoint,
+)
 from scan2mesh.services.storage import StorageService
 
 
@@ -289,3 +300,291 @@ class TestLoadCapturePlan:
         assert loaded.min_required_frames == original.min_required_frames
         assert loaded.recommended_distance_m == original.recommended_distance_m
         assert loaded.notes == original.notes
+
+
+class TestSaveFrameData:
+    """Tests for save_frame_data method."""
+
+    def test_save_frame_data(self, tmp_path: Path) -> None:
+        """Test saving frame data creates files."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        rgb = np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8)
+        depth = np.random.randint(0, 5000, (480, 640), dtype=np.uint16)
+
+        rgb_path, depth_path = service.save_frame_data(0, rgb, depth)
+
+        # Check paths are relative
+        assert rgb_path == "raw_frames/frame_0000_rgb.png"
+        assert depth_path == "raw_frames/frame_0000_depth.npy"
+
+        # Check files exist
+        assert (project_dir / rgb_path).exists()
+        assert (project_dir / depth_path).exists()
+
+    def test_save_frame_data_depth_roundtrip(self, tmp_path: Path) -> None:
+        """Test depth data is saved losslessly."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        depth = np.random.randint(0, 5000, (240, 320), dtype=np.uint16)
+
+        _, depth_path = service.save_frame_data(1, np.zeros((240, 320, 3), dtype=np.uint8), depth)
+
+        # Load and compare
+        loaded_depth = np.load(project_dir / depth_path)
+        np.testing.assert_array_equal(loaded_depth, depth)
+
+    def test_save_frame_data_creates_directory(self, tmp_path: Path) -> None:
+        """Test save_frame_data creates raw_frames directory."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        rgb = np.zeros((100, 100, 3), dtype=np.uint8)
+        depth = np.zeros((100, 100), dtype=np.uint16)
+
+        service.save_frame_data(0, rgb, depth)
+
+        assert (project_dir / "raw_frames").exists()
+        assert (project_dir / "raw_frames").is_dir()
+
+    def test_save_multiple_frames(self, tmp_path: Path) -> None:
+        """Test saving multiple frames with sequential IDs."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        for i in range(3):
+            rgb = np.zeros((100, 100, 3), dtype=np.uint8)
+            depth = np.zeros((100, 100), dtype=np.uint16)
+            rgb_path, depth_path = service.save_frame_data(i, rgb, depth)
+
+            assert f"frame_{i:04d}" in rgb_path
+            assert f"frame_{i:04d}" in depth_path
+
+
+class TestGetFramePath:
+    """Tests for get_frame_path method."""
+
+    def test_get_frame_path_rgb(self, tmp_path: Path) -> None:
+        """Test get_frame_path returns correct RGB path."""
+        service = StorageService(tmp_path)
+        path = service.get_frame_path(5, "rgb")
+        assert path == tmp_path / "raw_frames" / "frame_0005_rgb.png"
+
+    def test_get_frame_path_depth(self, tmp_path: Path) -> None:
+        """Test get_frame_path returns correct depth path."""
+        service = StorageService(tmp_path)
+        path = service.get_frame_path(10, "depth")
+        assert path == tmp_path / "raw_frames" / "frame_0010_depth.npy"
+
+    def test_get_frame_path_default_rgb(self, tmp_path: Path) -> None:
+        """Test get_frame_path defaults to RGB."""
+        service = StorageService(tmp_path)
+        path = service.get_frame_path(0)
+        assert "rgb" in str(path)
+
+
+class TestFramesMetadata:
+    """Tests for frames metadata methods."""
+
+    def test_save_frames_metadata(self, tmp_path: Path) -> None:
+        """Test saving frames metadata."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        intrinsics = CameraIntrinsics(
+            width=640, height=480, fx=600.0, fy=600.0, cx=320.0, cy=240.0, depth_scale=0.001
+        )
+        quality = FrameQuality(
+            depth_valid_ratio=0.95, blur_score=0.8, object_occupancy=0.5
+        )
+        frame = FrameData(
+            frame_id=0,
+            timestamp=datetime(2025, 1, 1, 12, 0, 0),
+            rgb_path="raw_frames/frame_0000_rgb.png",
+            depth_path="raw_frames/frame_0000_depth.npy",
+            intrinsics=intrinsics,
+            quality=quality,
+        )
+
+        metadata = FramesMetadata(frames=[frame], total_frames=1, keyframe_ids=[0])
+
+        service.save_frames_metadata(metadata)
+
+        assert service.frames_metadata_path.exists()
+
+    def test_load_frames_metadata(self, tmp_path: Path) -> None:
+        """Test loading frames metadata."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        # Create metadata file
+        import json
+
+        metadata_data = {
+            "frames": [
+                {
+                    "frame_id": 0,
+                    "timestamp": "2025-01-01T12:00:00",
+                    "rgb_path": "raw_frames/frame_0000_rgb.png",
+                    "depth_path": "raw_frames/frame_0000_depth.npy",
+                    "intrinsics": {
+                        "width": 640,
+                        "height": 480,
+                        "fx": 600.0,
+                        "fy": 600.0,
+                        "cx": 320.0,
+                        "cy": 240.0,
+                        "depth_scale": 0.001,
+                    },
+                    "quality": {
+                        "depth_valid_ratio": 0.95,
+                        "blur_score": 0.8,
+                        "object_occupancy": 0.5,
+                        "is_keyframe": True,
+                    },
+                }
+            ],
+            "total_frames": 1,
+            "keyframe_ids": [0],
+        }
+        service.frames_metadata_path.write_text(json.dumps(metadata_data))
+
+        metadata = service.load_frames_metadata()
+
+        assert metadata.total_frames == 1
+        assert len(metadata.frames) == 1
+        assert metadata.keyframe_ids == [0]
+
+    def test_load_missing_frames_metadata_raises(self, tmp_path: Path) -> None:
+        """Test loading nonexistent metadata raises error."""
+        service = StorageService(tmp_path)
+
+        with pytest.raises(ConfigError, match="not found"):
+            service.load_frames_metadata()
+
+    def test_frames_metadata_roundtrip(self, tmp_path: Path) -> None:
+        """Test save and load roundtrip for frames metadata."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        intrinsics = CameraIntrinsics(
+            width=1280, height=720, fx=640.0, fy=640.0, cx=640.0, cy=360.0, depth_scale=0.001
+        )
+        quality = FrameQuality(
+            depth_valid_ratio=0.9, blur_score=0.7, object_occupancy=0.6, is_keyframe=True
+        )
+        frame = FrameData(
+            frame_id=0,
+            timestamp=datetime(2025, 1, 1, 12, 0, 0),
+            rgb_path="raw_frames/frame_0000_rgb.png",
+            depth_path="raw_frames/frame_0000_depth.npy",
+            intrinsics=intrinsics,
+            quality=quality,
+        )
+
+        original = FramesMetadata(frames=[frame], total_frames=5, keyframe_ids=[0, 2, 4])
+
+        service.save_frames_metadata(original)
+        loaded = service.load_frames_metadata()
+
+        assert loaded.total_frames == original.total_frames
+        assert len(loaded.frames) == len(original.frames)
+        assert loaded.keyframe_ids == original.keyframe_ids
+
+
+class TestCaptureMetrics:
+    """Tests for capture metrics methods."""
+
+    def test_save_capture_metrics(self, tmp_path: Path) -> None:
+        """Test saving capture metrics."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        metrics = CaptureMetrics(
+            num_frames_raw=100,
+            num_keyframes=20,
+            depth_valid_ratio_mean=0.92,
+            depth_valid_ratio_min=0.85,
+            blur_score_mean=0.75,
+            blur_score_min=0.6,
+            coverage_score=0.88,
+            capture_duration_sec=120.5,
+            gate_status="pass",
+            gate_reasons=[],
+        )
+
+        service.save_capture_metrics(metrics)
+
+        assert service.capture_metrics_path.exists()
+
+    def test_load_capture_metrics(self, tmp_path: Path) -> None:
+        """Test loading capture metrics."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        # Create metrics file
+        import json
+
+        metrics_data = {
+            "num_frames_raw": 50,
+            "num_keyframes": 15,
+            "depth_valid_ratio_mean": 0.9,
+            "depth_valid_ratio_min": 0.8,
+            "blur_score_mean": 0.7,
+            "blur_score_min": 0.5,
+            "coverage_score": 0.85,
+            "capture_duration_sec": 60.0,
+            "gate_status": "warn",
+            "gate_reasons": ["Low coverage"],
+        }
+        service.capture_metrics_path.write_text(json.dumps(metrics_data))
+
+        metrics = service.load_capture_metrics()
+
+        assert metrics.num_frames_raw == 50
+        assert metrics.num_keyframes == 15
+        assert metrics.gate_status == "warn"
+
+    def test_load_missing_capture_metrics_raises(self, tmp_path: Path) -> None:
+        """Test loading nonexistent metrics raises error."""
+        service = StorageService(tmp_path)
+
+        with pytest.raises(ConfigError, match="not found"):
+            service.load_capture_metrics()
+
+    def test_capture_metrics_roundtrip(self, tmp_path: Path) -> None:
+        """Test save and load roundtrip for capture metrics."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        service = StorageService(project_dir)
+
+        original = CaptureMetrics(
+            num_frames_raw=75,
+            num_keyframes=18,
+            depth_valid_ratio_mean=0.88,
+            depth_valid_ratio_min=0.75,
+            blur_score_mean=0.82,
+            blur_score_min=0.65,
+            coverage_score=0.91,
+            capture_duration_sec=95.3,
+            gate_status="pass",
+            gate_reasons=[],
+        )
+
+        service.save_capture_metrics(original)
+        loaded = service.load_capture_metrics()
+
+        assert loaded.num_frames_raw == original.num_frames_raw
+        assert loaded.num_keyframes == original.num_keyframes
+        assert loaded.gate_status == original.gate_status

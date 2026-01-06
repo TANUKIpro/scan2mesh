@@ -9,6 +9,7 @@ from typing import Annotated
 import typer
 
 from scan2mesh.cli.display import (
+    display_capture_result,
     display_error,
     display_init_result,
     display_not_implemented,
@@ -158,6 +159,21 @@ def capture(
         Path,
         typer.Argument(help="Path to the project directory"),
     ],
+    num_frames: Annotated[
+        int,
+        typer.Option(
+            "--num-frames",
+            "-n",
+            help="Number of frames to capture",
+        ),
+    ] = 30,
+    use_mock: Annotated[
+        bool,
+        typer.Option(
+            "--mock",
+            help="Use mock camera for testing",
+        ),
+    ] = False,
 ) -> None:
     """Capture RGBD frames using RealSense camera.
 
@@ -165,7 +181,11 @@ def capture(
     """
     try:
         orchestrator = PipelineOrchestrator(project_dir)
-        orchestrator.run_capture()
+        metrics, status, suggestions = orchestrator.run_capture(
+            num_frames=num_frames,
+            use_mock=use_mock,
+        )
+        display_capture_result(metrics, status, str(project_dir), suggestions)
     except NotImplementedStageError:
         display_not_implemented("capture")
         raise typer.Exit(1) from None
