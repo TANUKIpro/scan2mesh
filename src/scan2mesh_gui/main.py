@@ -141,8 +141,10 @@ def render_page(page: str) -> None:
     from scan2mesh_gui.pages.capture_plan import render_capture_plan
     from scan2mesh_gui.pages.dashboard import render_dashboard
     from scan2mesh_gui.pages.devices import render_devices
+    from scan2mesh_gui.pages.optimize import render_optimize
     from scan2mesh_gui.pages.preprocess import render_preprocess
     from scan2mesh_gui.pages.profiles import render_profiles
+    from scan2mesh_gui.pages.reconstruct import render_reconstruct
     from scan2mesh_gui.pages.registry import render_registry
     from scan2mesh_gui.pages.settings import render_settings
 
@@ -155,12 +157,12 @@ def render_page(page: str) -> None:
         "capture_plan": render_capture_plan,
         "capture": render_capture,
         "preprocess": render_preprocess,
+        "reconstruct": render_reconstruct,
+        "optimize": render_optimize,
     }
 
-    # Pipeline pages (placeholders) - capture_plan, capture, preprocess are now implemented
+    # Pipeline pages (placeholders) - capture_plan through optimize are now implemented
     pipeline_pages = [
-        "reconstruct",
-        "optimize",
         "package",
         "report",
     ]
@@ -216,7 +218,7 @@ def render_pipeline_placeholder(page: str) -> None:
                 st.rerun()
     else:
         st.warning("No object selected. Please select an object from the Registry.")
-        if st.button("Go to Registry"):
+        if st.button("Go to Registry", key="placeholder_go_registry"):
             st.session_state.navigate_to = "registry"
             st.rerun()
 
