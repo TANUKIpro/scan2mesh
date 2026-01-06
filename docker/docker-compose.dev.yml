@@ -3,6 +3,7 @@
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up scan2mesh-cpu
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up scan2mesh-gpu
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up scan2mesh-gui
 #
 # This override:
 #   - Mounts source code for live development
@@ -47,6 +48,32 @@ services:
     environment:
       - SCAN2MESH_LOG_LEVEL=DEBUG
       - SCAN2MESH_PROJECT_DIR=/workspace/projects
+
+    # Override working directory for development
+    working_dir: /app
+
+  # ==========================================================================
+  # GUI Version - Development overrides
+  # ==========================================================================
+  scan2mesh-gui:
+    # Mount source code for live development (hot reload)
+    volumes:
+      - ../src:/app/src:ro
+      - ../tests:/app/tests:ro
+      - ../projects:/workspace/projects:rw
+      - ../profiles:/workspace/profiles:rw
+      - ../config:/workspace/config:ro
+      - ../output:/workspace/output:rw
+
+    # Development environment variables
+    environment:
+      - SCAN2MESH_LOG_LEVEL=DEBUG
+      - SCAN2MESH_PROJECT_DIR=/workspace/projects
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - STREAMLIT_SERVER_RUN_ON_SAVE=true
 
     # Override working directory for development
     working_dir: /app

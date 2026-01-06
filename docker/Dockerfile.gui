@@ -1,0 +1,118 @@
+# scan2mesh GUI Dockerfile
+# For running the Streamlit-based GUI application
+#
+# Build: docker build -f docker/Dockerfile.gui -t scan2mesh:gui .
+# Run:   docker run -it --rm -p 8501:8501 -v $(pwd)/projects:/workspace/projects scan2mesh:gui
+
+# =============================================================================
+# Stage 1: Builder
+# =============================================================================
+FROM python:3.10-slim-bookworm AS builder
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files first for better caching
+COPY pyproject.toml uv.lock ./
+
+# Create virtual environment and install dependencies
+RUN uv venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+
+# Install dependencies with gui extras
+RUN uv sync --frozen --no-install-project --extra gui
+
+# Copy source code
+COPY src/ ./src/
+COPY README.md ./
+
+# Install the project
+RUN uv sync --frozen --extra gui && uv pip install --no-deps .
+
+# =============================================================================
+# Stage 2: Runtime
+# =============================================================================
+FROM python:3.10-slim-bookworm AS runtime
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    SCAN2MESH_LOG_LEVEL=INFO \
+    SCAN2MESH_PROJECT_DIR=/workspace/projects \
+    STREAMLIT_SERVER_PORT=8501 \
+    STREAMLIT_SERVER_ADDRESS=0.0.0.0 \
+    STREAMLIT_SERVER_HEADLESS=true \
+    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libgomp1 \
+    libxrender1 \
+    libxext6 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd --gid 1000 scan2mesh \
+    && useradd --uid 1000 --gid scan2mesh --shell /bin/bash --create-home scan2mesh
+
+# Create workspace directories
+RUN mkdir -p /workspace/projects /workspace/config /workspace/output /workspace/profiles \
+    && chown -R scan2mesh:scan2mesh /workspace
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy source code from builder
+COPY --from=builder /app/src /app/src
+COPY --from=builder /app/pyproject.toml /app/pyproject.toml
+
+# Create Streamlit config directory
+RUN mkdir -p /home/scan2mesh/.streamlit \
+    && chown -R scan2mesh:scan2mesh /home/scan2mesh/.streamlit
+
+# Set working directory
+WORKDIR /app
+
+# Switch to non-root user
+USER scan2mesh
+
+# Expose Streamlit port
+EXPOSE 8501
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl --fail http://localhost:8501/_stcore/health || exit 1
+
+# Labels
+LABEL org.opencontainers.image.title="scan2mesh GUI" \
+      org.opencontainers.image.description="RealSense RGBD to 3D asset pipeline - Streamlit GUI" \
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.source="https://github.com/scan2mesh/scan2mesh"
+
+# Default command to run Streamlit
+CMD ["streamlit", "run", "src/scan2mesh_gui/main.py", "--server.port=8501", "--server.address=0.0.0.0"]
