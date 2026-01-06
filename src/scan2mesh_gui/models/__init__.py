@@ -5,6 +5,12 @@ from scan2mesh_gui.models.capture_plan import (
     CapturePlanPreset,
     ViewPoint,
 )
+from scan2mesh_gui.models.capture_session import (
+    CapturedFrame,
+    CaptureSession,
+    CaptureSessionMetrics,
+    FrameQuality,
+)
 from scan2mesh_gui.models.config import AppConfig, DefaultPreset, QualityThresholds
 from scan2mesh_gui.models.device import DeviceInfo
 from scan2mesh_gui.models.profile import Profile
@@ -15,8 +21,12 @@ __all__ = [
     "AppConfig",
     "CapturePlan",
     "CapturePlanPreset",
+    "CapturedFrame",
+    "CaptureSession",
+    "CaptureSessionMetrics",
     "DefaultPreset",
     "DeviceInfo",
+    "FrameQuality",
     "PipelineStage",
     "Profile",
     "QualityStatus",
