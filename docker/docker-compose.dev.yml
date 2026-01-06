@@ -1,0 +1,52 @@
+# scan2mesh Docker Compose development override
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up scan2mesh-cpu
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up scan2mesh-gpu
+#
+# This override:
+#   - Mounts source code for live development
+#   - Sets debug log level
+#   - Exposes additional ports if needed
+
+services:
+  # ==========================================================================
+  # GPU Version - Development overrides
+  # ==========================================================================
+  scan2mesh-gpu:
+    # Mount source code for live development
+    volumes:
+      - ../src:/app/src:ro
+      - ../tests:/app/tests:ro
+      - ../projects:/workspace/projects:rw
+      - ../config:/workspace/config:ro
+      - ../output:/workspace/output:rw
+
+    # Development environment variables
+    environment:
+      - SCAN2MESH_LOG_LEVEL=DEBUG
+      - SCAN2MESH_PROJECT_DIR=/workspace/projects
+      - CUDA_VISIBLE_DEVICES=0
+
+    # Override working directory for development
+    working_dir: /app
+
+  # ==========================================================================
+  # CPU Version - Development overrides
+  # ==========================================================================
+  scan2mesh-cpu:
+    # Mount source code for live development
+    volumes:
+      - ../src:/app/src:ro
+      - ../tests:/app/tests:ro
+      - ../projects:/workspace/projects:rw
+      - ../config:/workspace/config:ro
+      - ../output:/workspace/output:rw
+
+    # Development environment variables
+    environment:
+      - SCAN2MESH_LOG_LEVEL=DEBUG
+      - SCAN2MESH_PROJECT_DIR=/workspace/projects
+
+    # Override working directory for development
+    working_dir: /app

@@ -1,0 +1,88 @@
+# scan2mesh Docker Compose configuration
+#
+# Usage:
+#   GPU version: docker compose up scan2mesh-gpu
+#   CPU version: docker compose up scan2mesh-cpu
+#
+# For development, use docker-compose.dev.yml override:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up scan2mesh-cpu
+
+services:
+  # ==========================================================================
+  # GPU Version - Full functionality with NVIDIA GPU acceleration
+  # ==========================================================================
+  scan2mesh-gpu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gpu
+    image: scan2mesh:gpu
+    container_name: scan2mesh-gpu
+
+    # NVIDIA GPU support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+
+    # Environment variables
+    environment:
+      - SCAN2MESH_LOG_LEVEL=INFO
+      - SCAN2MESH_PROJECT_DIR=/workspace/projects
+      - CUDA_VISIBLE_DEVICES=0
+
+    # Volume mounts
+    volumes:
+      - ../projects:/workspace/projects:rw
+      - ../config:/workspace/config:ro
+      - ../output:/workspace/output:rw
+
+    # USB device access for RealSense camera
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+
+    # Interactive terminal
+    stdin_open: true
+    tty: true
+
+    # Restart policy
+    restart: "no"
+
+  # ==========================================================================
+  # CPU Version - Lightweight version for development and CI/CD
+  # ==========================================================================
+  scan2mesh-cpu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cpu
+    image: scan2mesh:cpu
+    container_name: scan2mesh-cpu
+
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+
+    # Environment variables
+    environment:
+      - SCAN2MESH_LOG_LEVEL=INFO
+      - SCAN2MESH_PROJECT_DIR=/workspace/projects
+
+    # Volume mounts
+    volumes:
+      - ../projects:/workspace/projects:rw
+      - ../config:/workspace/config:ro
+      - ../output:/workspace/output:rw
+
+    # Interactive terminal
+    stdin_open: true
+    tty: true
+
+    # Restart policy
+    restart: "no"
+

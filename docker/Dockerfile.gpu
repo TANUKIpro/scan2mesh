@@ -1,0 +1,154 @@
+# scan2mesh GPU Dockerfile
+# For production environments with NVIDIA GPU support
+#
+# Build: docker build -f docker/Dockerfile.gpu -t scan2mesh:gpu .
+# Run:   docker run -it --rm --gpus all -v $(pwd)/projects:/workspace/projects scan2mesh:gpu
+#
+# Requirements:
+# - NVIDIA GPU with Compute Capability 6.0+
+# - NVIDIA Driver 525+
+# - NVIDIA Container Toolkit installed
+
+# =============================================================================
+# Stage 1: Builder
+# =============================================================================
+FROM nvidia/cuda:12.2-devel-ubuntu22.04 AS builder
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies and Python
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    curl \
+    git \
+    pkg-config \
+    python3.10 \
+    python3.10-dev \
+    python3.10-venv \
+    python3-pip \
+    # RealSense SDK dependencies
+    libssl-dev \
+    libusb-1.0-0-dev \
+    libudev-dev \
+    libglfw3-dev \
+    libgtk-3-dev \
+    # OpenCV dependencies
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    # Open3D dependencies
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Python 3.10 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files first for better caching
+COPY pyproject.toml uv.lock ./
+
+# Create virtual environment and install dependencies
+RUN uv venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+
+# Install all dependencies including full extras (GPU-accelerated libraries)
+RUN uv sync --frozen --no-install-project --all-extras
+
+# Copy source code
+COPY src/ ./src/
+COPY README.md ./
+
+# Install the project (sync for deps, then pip install for console scripts)
+RUN uv sync --frozen --all-extras && uv pip install --no-deps .
+
+# =============================================================================
+# Stage 2: Runtime
+# =============================================================================
+FROM nvidia/cuda:12.2-runtime-ubuntu22.04 AS runtime
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    SCAN2MESH_LOG_LEVEL=INFO \
+    SCAN2MESH_PROJECT_DIR=/workspace/projects \
+    CUDA_VISIBLE_DEVICES=0 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-venv \
+    # OpenCV runtime dependencies
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    # Open3D runtime dependencies
+    libgomp1 \
+    # RealSense runtime dependencies
+    libusb-1.0-0 \
+    udev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Set Python 3.10 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
+# Create non-root user for security
+RUN groupadd --gid 1000 scan2mesh \
+    && useradd --uid 1000 --gid scan2mesh --shell /bin/bash --create-home scan2mesh
+
+# Create workspace directories
+RUN mkdir -p /workspace/projects /workspace/config /workspace/output \
+    && chown -R scan2mesh:scan2mesh /workspace
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy source code from builder (needed for editable install)
+COPY --from=builder /app/src /app/src
+COPY --from=builder /app/pyproject.toml /app/pyproject.toml
+
+# Copy entrypoint script
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+# Set working directory
+WORKDIR /workspace
+
+# Switch to non-root user
+USER scan2mesh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD scan2mesh --version > /dev/null 2>&1 || exit 1
+
+# Labels
+LABEL org.opencontainers.image.title="scan2mesh (GPU)" \
+      org.opencontainers.image.description="RealSense RGBD to 3D asset pipeline - GPU accelerated version" \
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.source="https://github.com/scan2mesh/scan2mesh"
+
+# Entrypoint and default command
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["scan2mesh", "--help"]

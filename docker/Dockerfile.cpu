@@ -1,0 +1,108 @@
+# scan2mesh CPU-only Dockerfile
+# For development, testing, and CI/CD environments without GPU
+#
+# Build: docker build -f docker/Dockerfile.cpu -t scan2mesh:cpu .
+# Run:   docker run -it --rm -v $(pwd)/projects:/workspace/projects scan2mesh:cpu
+
+# =============================================================================
+# Stage 1: Builder
+# =============================================================================
+FROM python:3.10-slim-bookworm AS builder
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files first for better caching
+COPY pyproject.toml uv.lock ./
+
+# Create virtual environment and install dependencies
+RUN uv venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+
+# Install dependencies (dev only for CPU version - no full extras)
+RUN uv sync --frozen --no-install-project
+
+# Copy source code
+COPY src/ ./src/
+COPY README.md ./
+
+# Install the project (sync for deps, then pip install for console scripts)
+RUN uv sync --frozen && uv pip install --no-deps .
+
+# =============================================================================
+# Stage 2: Runtime
+# =============================================================================
+FROM python:3.10-slim-bookworm AS runtime
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    SCAN2MESH_LOG_LEVEL=INFO \
+    SCAN2MESH_PROJECT_DIR=/workspace/projects
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd --gid 1000 scan2mesh \
+    && useradd --uid 1000 --gid scan2mesh --shell /bin/bash --create-home scan2mesh
+
+# Create workspace directories
+RUN mkdir -p /workspace/projects /workspace/config /workspace/output \
+    && chown -R scan2mesh:scan2mesh /workspace
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy source code from builder (needed for editable install)
+COPY --from=builder /app/src /app/src
+COPY --from=builder /app/pyproject.toml /app/pyproject.toml
+
+# Copy entrypoint script
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+# Set working directory
+WORKDIR /workspace
+
+# Switch to non-root user
+USER scan2mesh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD scan2mesh --version > /dev/null 2>&1 || exit 1
+
+# Labels
+LABEL org.opencontainers.image.title="scan2mesh (CPU)" \
+      org.opencontainers.image.description="RealSense RGBD to 3D asset pipeline - CPU only version" \
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.source="https://github.com/scan2mesh/scan2mesh"
+
+# Entrypoint and default command
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["scan2mesh", "--help"]
