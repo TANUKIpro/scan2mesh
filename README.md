@@ -14,7 +14,7 @@ scan2meshは、Intel RealSenseカメラを用いた3Dスキャンから、シミ
 
 ## 開発ステータス
 
-**現在のバージョン**: 0.1.0 (Alpha)
+**現在のバージョン**: 0.2.0 (Beta)
 
 ### 実装状況
 
@@ -37,7 +37,7 @@ scan2meshは、Intel RealSenseカメラを用いた3Dスキャンから、シミ
 | Phase 2 | capture, preprocess の実装 | ✅ 完了 |
 | Phase 3 | reconstruct, optimize の実装 | ✅ 完了 |
 | Phase 4 | package, report の実装 | ✅ 完了 |
-| Phase 5 | Docker環境の整備 | 📋 予定 |
+| Phase 5 | Docker環境の整備 | ✅ 完了 |
 
 ## パイプライン構成
 
@@ -232,6 +232,8 @@ RealSenseカメラからRGB-Dデータを取得します。
 
 - Python 3.10以上
 - uv（推奨パッケージマネージャ）
+- Docker 24.0+（Docker環境を使用する場合）
+- NVIDIA Container Toolkit（GPU版を使用する場合）
 
 ### uvのインストール
 
@@ -265,6 +267,58 @@ uv sync --all-extras
 
 # テストを実行して確認
 uv run pytest
+```
+
+### Docker環境のセットアップ
+
+scan2meshはGPU版とCPU版のDockerイメージを提供しています。
+
+#### GPU版（本番環境向け）
+
+NVIDIA GPU搭載環境でフル機能を利用できます。
+
+```bash
+cd docker
+
+# GPU版イメージのビルド
+docker compose build scan2mesh-gpu
+
+# コンテナの起動
+docker compose up scan2mesh-gpu
+
+# コンテナ内でコマンドを実行
+docker compose exec scan2mesh-gpu scan2mesh --help
+```
+
+**GPU版の要件**:
+- NVIDIA GPU（Compute Capability 6.0以上）
+- NVIDIA Driver 525以上
+- NVIDIA Container Toolkit
+
+#### CPU版（開発・CI向け）
+
+GPUがない環境でも基本機能とテストを実行できます。
+
+```bash
+cd docker
+
+# CPU版イメージのビルド
+docker compose build scan2mesh-cpu
+
+# コンテナの起動
+docker compose up scan2mesh-cpu
+
+# コンテナ内でテストを実行
+docker compose exec scan2mesh-cpu pytest
+```
+
+#### 開発用オーバーライド
+
+ソースコードをライブマウントして開発する場合:
+
+```bash
+cd docker
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up scan2mesh-cpu
 ```
 
 ## クイックスタート
