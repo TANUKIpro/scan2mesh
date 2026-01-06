@@ -1,10 +1,14 @@
 """Sidebar component with navigation and system status."""
 
+from typing import TYPE_CHECKING
 
 import streamlit as st
 
-from scan2mesh_gui.models.profile import Profile
 from scan2mesh_gui.models.scan_object import PipelineStage
+
+
+if TYPE_CHECKING:
+    from scan2mesh_gui.models.profile import Profile
 
 
 # Navigation items with icons
@@ -130,6 +134,8 @@ def render_navigation() -> str:
 
 def render_system_status() -> None:
     """Render the system status indicators."""
+    from scan2mesh_gui.services.device_service import DeviceService
+
     st.markdown("**System Status**")
 
     # RealSense status
@@ -142,6 +148,21 @@ def render_system_status() -> None:
     else:
         st.markdown(
             '<span style="color: #dc3545;">○ RealSense Disconnected</span>',
+            unsafe_allow_html=True,
+        )
+
+    # Selected device
+    service = DeviceService()
+    selected_device = service.get_selected_device()
+    if selected_device:
+        st.markdown(
+            f'<span style="color: #007bff; font-size: 12px;">'
+            f'Using: {selected_device.name[:20]}</span>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<span style="color: #6c757d; font-size: 12px;">No device selected</span>',
             unsafe_allow_html=True,
         )
 
