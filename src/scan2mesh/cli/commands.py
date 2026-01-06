@@ -18,6 +18,7 @@ from scan2mesh.cli.display import (
     display_plan_result,
     display_preprocess_result,
     display_reconstruct_result,
+    display_report_result,
 )
 from scan2mesh.cli.validators import (
     validate_class_id,
@@ -360,10 +361,8 @@ def report(
     """
     try:
         orchestrator = PipelineOrchestrator(project_dir)
-        orchestrator.run_report()
-    except NotImplementedStageError:
-        display_not_implemented("report")
-        raise typer.Exit(1) from None
+        quality_report = orchestrator.run_report()
+        display_report_result(quality_report, str(project_dir))
     except Scan2MeshError as e:
         display_error(str(e))
         raise typer.Exit(1) from e

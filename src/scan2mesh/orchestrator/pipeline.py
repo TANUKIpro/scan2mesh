@@ -22,6 +22,7 @@ from scan2mesh.models import (
     PackageResult,
     PreprocessMetrics,
     ProjectConfig,
+    QualityReport,
     ReconReport,
 )
 from scan2mesh.services import BaseCameraService, StorageService, create_camera_service
@@ -31,6 +32,7 @@ from scan2mesh.stages import (
     Packager,
     Preprocessor,
     ProjectInitializer,
+    QualityReporter,
     Reconstructor,
     RGBDCapture,
 )
@@ -357,13 +359,25 @@ class PipelineOrchestrator:
 
         return result
 
-    def run_report(self) -> None:
+    def run_report(self) -> QualityReport:
         """Run the reporting stage.
 
-        Raises:
-            NotImplementedStageError: This stage is not yet implemented
+        Generates a comprehensive quality report from all pipeline stages.
+
+        Returns:
+            QualityReport containing the full quality assessment
         """
-        raise NotImplementedStageError("PipelineOrchestrator.run_report")
+        logger.info(f"Running report stage for project: {self.project_dir}")
+
+        storage = StorageService(self.project_dir)
+
+        # Create and run reporter
+        reporter = QualityReporter(
+            project_dir=self.project_dir,
+            storage=storage,
+        )
+
+        return reporter.report()
 
     def run_full_pipeline(self) -> None:
         """Run the complete pipeline from start to finish.

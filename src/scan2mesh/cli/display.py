@@ -15,6 +15,7 @@ from scan2mesh.models import (
     PackageResult,
     PreprocessMetrics,
     ProjectConfig,
+    QualityReport,
     ReconReport,
 )
 
@@ -415,3 +416,95 @@ def display_package_result(
 
     panel = Panel(table, title=title, border_style=border_style)
     console.print(panel)
+
+
+def display_report_result(
+    report: QualityReport,
+    project_dir: str,
+) -> None:
+    """Display quality report with stage summaries and suggestions.
+
+    Args:
+        report: QualityReport containing the assessment
+        project_dir: Path to the project directory
+    """
+    # Determine panel style based on overall status
+    if report.overall_status == QualityStatus.PASS.value:
+        title = "[bold green]Quality Report - PASS[/bold green]"
+        border_style = "green"
+        status_text = "[green]PASS[/green]"
+    elif report.overall_status == QualityStatus.WARN.value:
+        title = "[bold yellow]Quality Report - WARN[/bold yellow]"
+        border_style = "yellow"
+        status_text = "[yellow]WARN[/yellow]"
+    else:
+        title = "[bold red]Quality Report - FAIL[/bold red]"
+        border_style = "red"
+        status_text = "[red]FAIL[/red]"
+
+    # Build main info table
+    info_table = Table(show_header=False, box=None)
+    info_table.add_column("Property", style="cyan")
+    info_table.add_column("Value", style="white")
+
+    info_table.add_row("Project Directory", project_dir)
+    info_table.add_row("Object Name", report.project_name)
+    info_table.add_row("Class ID", str(report.class_id))
+    info_table.add_row("Overall Status", status_text)
+
+    panel = Panel(info_table, title=title, border_style=border_style)
+    console.print(panel)
+
+    # Build stage summary table
+    console.print()
+    console.print("[bold cyan]Stage Quality Summary[/bold cyan]")
+
+    stage_table = Table(show_header=True, header_style="bold")
+    stage_table.add_column("Stage", style="cyan", width=15)
+    stage_table.add_column("Status", width=10)
+    stage_table.add_column("Reasons", style="dim")
+
+    for summary in report.stage_summaries:
+        # Format status with color
+        if summary.status == QualityStatus.PASS.value:
+            status_styled = "[green]PASS[/green]"
+        elif summary.status == QualityStatus.WARN.value:
+            status_styled = "[yellow]WARN[/yellow]"
+        elif summary.status == QualityStatus.FAIL.value:
+            status_styled = "[red]FAIL[/red]"
+        else:
+            status_styled = "[dim]PENDING[/dim]"
+
+        # Join reasons
+        reasons_text = "; ".join(summary.reasons) if summary.reasons else "-"
+        if len(reasons_text) > 50:
+            reasons_text = reasons_text[:47] + "..."
+
+        stage_table.add_row(
+            summary.stage_name.capitalize(),
+            status_styled,
+            reasons_text,
+        )
+
+    console.print(stage_table)
+
+    # Display overall reasons if any
+    if report.overall_reasons:
+        console.print()
+        console.print("[bold cyan]Overall Assessment[/bold cyan]")
+        for reason in report.overall_reasons:
+            console.print(f"  [dim]-[/dim] {reason}")
+
+    # Display missing stages if any
+    if report.missing_stages:
+        console.print()
+        console.print("[bold yellow]Missing Stages[/bold yellow]")
+        for stage in report.missing_stages:
+            console.print(f"  [dim]-[/dim] {stage.capitalize()} stage not completed")
+
+    # Display suggestions if any
+    if report.suggestions:
+        console.print()
+        console.print("[bold cyan]Suggestions for Improvement[/bold cyan]")
+        for suggestion in report.suggestions:
+            console.print(f"  [dim]-[/dim] {suggestion}")

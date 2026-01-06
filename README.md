@@ -27,7 +27,7 @@ scan2meshは、Intel RealSenseカメラを用いた3Dスキャンから、シミ
 | 4 | reconstruct | ✅ 完全実装 | 3D復元 |
 | 5 | optimize | ✅ 完全実装 | アセット最適化 |
 | 6 | package | ✅ 完全実装 | パッケージング |
-| 7 | report | 🚧 スタブのみ | 品質レポート |
+| 7 | report | ✅ 完全実装 | 品質レポート |
 
 ### ロードマップ
 
@@ -36,7 +36,7 @@ scan2meshは、Intel RealSenseカメラを用いた3Dスキャンから、シミ
 | Phase 1 | init, plan の完全実装 | ✅ 完了 |
 | Phase 2 | capture, preprocess の実装 | ✅ 完了 |
 | Phase 3 | reconstruct, optimize の実装 | ✅ 完了 |
-| Phase 4 | package, report の実装 | 🚧 進行中 |
+| Phase 4 | package, report の実装 | ✅ 完了 |
 | Phase 5 | Docker環境の整備 | 📋 予定 |
 
 ## パイプライン構成
@@ -60,7 +60,7 @@ graph LR
     style E fill:#90EE90
     style F fill:#90EE90
     style G fill:#90EE90
-    style H fill:#FFE4B5
+    style H fill:#90EE90
 ```
 
 ### Stage 0: プロジェクト初期化 (init) ✅
@@ -209,16 +209,22 @@ RealSenseカメラからRGB-Dデータを取得します。
 - `output/preview.png`: プレビュー画像
 - `{object_name}_{class_id}.zip`: 配布用アーカイブ
 
-### Stage 7: 品質レポート (report) 🚧
+### Stage 7: 品質レポート (report) ✅
 
 生成されたアセットの品質と次に取るべきアクションを提示します。
 
-**予定機能**:
-- キャプチャ品質の表示
-- 復元品質の表示
-- アセット品質の表示
-- 総合判定（PASS/WARN/FAIL）
-- 次アクションの提案
+**機能**:
+- パイプライン全ステージのメトリクス収集
+- 各ステージの品質サマリー表示（capture, preprocess, reconstruct, optimize）
+- 総合品質判定（PASS/WARN/FAIL）
+- 具体的な改善提案の生成
+- Rich形式での見やすいレポート表示
+
+**出力**:
+- CLIに品質レポートを表示
+  - プロジェクト情報（オブジェクト名、クラスID）
+  - 各ステージの品質ステータスと理由
+  - 総合判定と改善提案
 
 ## インストール
 
@@ -370,13 +376,11 @@ uv run scan2mesh optimize ./projects/robocup_ball
 uv run scan2mesh package ./projects/robocup_ball
 ```
 
-### 次のステップ
+### 8. 品質レポートの生成
 
-現在実装済みの機能は `init`, `plan`, `capture`, `preprocess`, `reconstruct`, `optimize`, `package` です。
-Stage 7 (report) は開発中のため、以下のコマンドは `NotImplementedError` を発生させます:
+パイプライン全体の品質レポートを生成します。
 
 ```bash
-# これは現在動作しません
 uv run scan2mesh report ./projects/robocup_ball
 ```
 
@@ -659,13 +663,44 @@ scan2mesh package PROJECT_DIR
 uv run scan2mesh package ./projects/ball
 ```
 
-### 未実装コマンド
+### scan2mesh report
 
-以下のコマンドは現在開発中です（スタブのみ実装）:
+品質レポートを生成します。
 
-| コマンド | 説明 |
-|---------|------|
-| `scan2mesh report PROJECT_DIR` | 品質レポートの生成 |
+**構文**:
+```bash
+scan2mesh report PROJECT_DIR
+```
+
+**引数**:
+
+| 引数 | 型 | 説明 |
+|------|-----|------|
+| `PROJECT_DIR` | PATH | プロジェクトディレクトリのパス |
+
+**出力内容**:
+
+| セクション | 説明 |
+|-----------|------|
+| プロジェクト情報 | オブジェクト名、クラスID、総合ステータス |
+| ステージサマリー | 各ステージ（capture, preprocess, reconstruct, optimize）のステータスと理由 |
+| 総合評価 | パイプライン全体の品質判定理由 |
+| 改善提案 | 品質向上のための具体的な提案 |
+
+**品質判定ロジック**:
+
+| 総合ステータス | 条件 |
+|--------------|------|
+| PASS | 全ステージがPASS |
+| WARN | 少なくとも1つのステージがWARN（FAILなし） |
+| FAIL | 少なくとも1つのステージがFAIL |
+
+**使用例**:
+
+```bash
+# 品質レポートを生成
+uv run scan2mesh report ./projects/ball
+```
 
 ## プロジェクト構造
 
@@ -703,8 +738,8 @@ scan2mesh/
 │   │   ├── preprocess.py     # ✅ Preprocessor
 │   │   ├── reconstruct.py    # ✅ Reconstructor
 │   │   ├── optimize.py       # ✅ AssetOptimizer
-│   │   ├── package.py        # 🚧 Packager (stub)
-│   │   └── report.py         # 🚧 QualityReporter (stub)
+│   │   ├── package.py        # ✅ Packager
+│   │   └── report.py         # ✅ QualityReporter
 │   ├── services/             # 共通サービス
 │   ├── models/               # データモデル (Pydantic)
 │   ├── gates/                # 品質ゲート

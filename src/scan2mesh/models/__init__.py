@@ -30,6 +30,7 @@ from scan2mesh.models.manifest import (
 from scan2mesh.models.package import PackageResult
 from scan2mesh.models.preprocess import MaskedFrame, MaskMethod, PreprocessMetrics
 from scan2mesh.models.reconstruct import PoseEstimate, ReconReport
+from scan2mesh.models.report import QualityReport, StageQualitySummary
 
 
 __all__ = [
@@ -54,9 +55,11 @@ __all__ = [
     "PreprocessMetrics",
     "ProjectConfig",
     "Provenance",
+    "QualityReport",
     "QualityStatus",
     "RawFrame",
     "ReconReport",
     "ScaleInfo",
+    "StageQualitySummary",
     "ViewPoint",
 ]
