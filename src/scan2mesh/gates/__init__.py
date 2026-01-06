@@ -6,6 +6,7 @@ for validating pipeline outputs at each stage.
 
 from scan2mesh.gates.asset import AssetQualityGate
 from scan2mesh.gates.capture import CaptureQualityGate
+from scan2mesh.gates.preprocess import PreprocessQualityGate
 from scan2mesh.gates.reconstruct import ReconQualityGate
 from scan2mesh.gates.thresholds import QualityThresholds
 
@@ -13,6 +14,7 @@ from scan2mesh.gates.thresholds import QualityThresholds
 __all__ = [
     "AssetQualityGate",
     "CaptureQualityGate",
+    "PreprocessQualityGate",
     "QualityThresholds",
     "ReconQualityGate",
 ]

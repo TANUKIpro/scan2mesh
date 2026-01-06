@@ -27,7 +27,7 @@ from scan2mesh.models.manifest import (
     Provenance,
     QualityStatus,
 )
-from scan2mesh.models.preprocess import MaskedFrame, MaskMethod
+from scan2mesh.models.preprocess import MaskedFrame, MaskMethod, PreprocessMetrics
 from scan2mesh.models.reconstruct import PoseEstimate, ReconReport
 
 
@@ -49,6 +49,7 @@ __all__ = [
     "MaskedFrame",
     "OutputPreset",
     "PoseEstimate",
+    "PreprocessMetrics",
     "ProjectConfig",
     "Provenance",
     "QualityStatus",

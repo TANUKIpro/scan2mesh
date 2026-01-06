@@ -8,7 +8,12 @@ from rich.panel import Panel
 from rich.table import Table
 
 from scan2mesh.gates.thresholds import QualityStatus
-from scan2mesh.models import CaptureMetrics, CapturePlan, ProjectConfig
+from scan2mesh.models import (
+    CaptureMetrics,
+    CapturePlan,
+    PreprocessMetrics,
+    ProjectConfig,
+)
 
 
 console = Console()
@@ -174,6 +179,63 @@ def display_capture_result(
     table.add_row("  Blur Score (mean)", f"{metrics.blur_score_mean:.2f}")
     table.add_row("  Blur Score (min)", f"{metrics.blur_score_min:.2f}")
     table.add_row("  Coverage Score", f"{metrics.coverage_score:.1%}")
+
+    panel = Panel(table, title=title, border_style=border_style)
+    console.print(panel)
+
+    # Display suggestions if any
+    if suggestions:
+        console.print()
+        console.print("[bold cyan]Suggestions for Improvement:[/bold cyan]")
+        for suggestion in suggestions:
+            console.print(f"  [dim]-[/dim] {suggestion}")
+
+
+def display_preprocess_result(
+    metrics: PreprocessMetrics,
+    status: QualityStatus,
+    project_dir: str,
+    suggestions: list[str] | None = None,
+) -> None:
+    """Display preprocess result with metrics and quality gate status.
+
+    Args:
+        metrics: Preprocess metrics from the session
+        status: Quality gate status
+        project_dir: Path to the project directory
+        suggestions: Optional list of improvement suggestions
+    """
+    # Determine panel style based on status
+    if status == QualityStatus.PASS:
+        title = "[bold green]Preprocessing Completed Successfully[/bold green]"
+        border_style = "green"
+        status_text = "[green]PASS[/green]"
+    elif status == QualityStatus.WARN:
+        title = "[bold yellow]Preprocessing Completed with Warnings[/bold yellow]"
+        border_style = "yellow"
+        status_text = "[yellow]WARN[/yellow]"
+    else:
+        title = "[bold red]Preprocessing Completed with Issues[/bold red]"
+        border_style = "red"
+        status_text = "[red]FAIL[/red]"
+
+    # Build metrics table
+    table = Table(show_header=False, box=None)
+    table.add_column("Property", style="cyan")
+    table.add_column("Value", style="white")
+
+    table.add_row("Project Directory", project_dir)
+    table.add_row("Quality Status", status_text)
+    table.add_row("")
+    table.add_row("[bold]Frame Statistics[/bold]", "")
+    table.add_row("  Input Keyframes", str(metrics.num_input_frames))
+    table.add_row("  Output Frames", str(metrics.num_output_frames))
+    table.add_row("  Valid Frames Ratio", f"{metrics.valid_frames_ratio:.1%}")
+    table.add_row("")
+    table.add_row("[bold]Mask Quality[/bold]", "")
+    table.add_row("  Mask Method", metrics.mask_method.value)
+    table.add_row("  Mask Area Ratio (mean)", f"{metrics.mask_area_ratio_mean:.1%}")
+    table.add_row("  Mask Area Ratio (min)", f"{metrics.mask_area_ratio_min:.1%}")
 
     panel = Panel(table, title=title, border_style=border_style)
     console.print(panel)

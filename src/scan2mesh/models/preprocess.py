@@ -1,6 +1,6 @@
 """Preprocessing data models.
 
-This module defines models for masked frames and preprocessing methods.
+This module defines models for masked frames, preprocessing methods, and metrics.
 """
 
 from enum import Enum
@@ -36,5 +36,31 @@ class MaskedFrame(BaseModel):
     mask_method: MaskMethod
     mask_area_ratio: float = Field(..., ge=0.0, le=1.0)
     is_valid: bool = Field(default=True)
+
+    model_config = {"frozen": True}
+
+
+class PreprocessMetrics(BaseModel):
+    """Metrics for a preprocessing session.
+
+    Attributes:
+        num_input_frames: Number of input keyframes
+        num_output_frames: Number of successfully processed frames
+        mask_method: Method used for masking
+        mask_area_ratio_mean: Mean mask area ratio across frames
+        mask_area_ratio_min: Minimum mask area ratio
+        valid_frames_ratio: Ratio of valid output frames to input frames
+        gate_status: Quality gate status (pass, warn, fail)
+        gate_reasons: Reasons for quality gate status
+    """
+
+    num_input_frames: int = Field(..., ge=0)
+    num_output_frames: int = Field(..., ge=0)
+    mask_method: MaskMethod
+    mask_area_ratio_mean: float = Field(..., ge=0.0, le=1.0)
+    mask_area_ratio_min: float = Field(..., ge=0.0, le=1.0)
+    valid_frames_ratio: float = Field(..., ge=0.0, le=1.0)
+    gate_status: str = Field(default="pending")
+    gate_reasons: list[str] = Field(default_factory=list)
 
     model_config = {"frozen": True}

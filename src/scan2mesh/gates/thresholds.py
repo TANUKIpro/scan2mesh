@@ -26,6 +26,13 @@ RECON_MIN_INLIER_RATIO: Final[float] = 0.6
 RECON_MAX_REPROJECTION_ERROR: Final[float] = 2.0
 RECON_MIN_POINTS: Final[int] = 10000
 
+# Preprocess quality thresholds
+PREPROCESS_MIN_MASK_AREA_RATIO: Final[float] = 0.1
+PREPROCESS_MAX_MASK_AREA_RATIO: Final[float] = 0.9
+PREPROCESS_MIN_VALID_FRAMES_RATIO: Final[float] = 0.8
+PREPROCESS_WARN_MASK_AREA_MIN: Final[float] = 0.15
+PREPROCESS_WARN_VALID_FRAMES_RATIO: Final[float] = 0.9
+
 # Asset quality thresholds
 ASSET_MAX_POLYGONS_LOD0: Final[int] = 100000
 ASSET_MAX_POLYGONS_LOD1: Final[int] = 50000

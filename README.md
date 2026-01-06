@@ -23,7 +23,7 @@ scan2meshは、Intel RealSenseカメラを用いた3Dスキャンから、シミ
 | 0 | init | ✅ 完全実装 | プロジェクト初期化 |
 | 1 | plan | ✅ 完全実装 | 撮影計画生成 |
 | 2 | capture | ✅ 完全実装 | RGBDフレーム取得 |
-| 3 | preprocess | 🚧 スタブのみ | 前処理・背景除去 |
+| 3 | preprocess | ✅ 完全実装 | 前処理・背景除去 |
 | 4 | reconstruct | 🚧 スタブのみ | 3D復元 |
 | 5 | optimize | 🚧 スタブのみ | アセット最適化 |
 | 6 | package | 🚧 スタブのみ | パッケージング |

@@ -8,16 +8,24 @@ from pathlib import Path
 
 from scan2mesh.exceptions import NotImplementedStageError
 from scan2mesh.gates.capture import CaptureQualityGate
+from scan2mesh.gates.preprocess import PreprocessQualityGate
 from scan2mesh.gates.thresholds import QualityStatus
 from scan2mesh.models import (
     CaptureMetrics,
     CapturePlan,
     CapturePlanPreset,
+    MaskMethod,
     OutputPreset,
+    PreprocessMetrics,
     ProjectConfig,
 )
 from scan2mesh.services import BaseCameraService, StorageService, create_camera_service
-from scan2mesh.stages import CapturePlanner, ProjectInitializer, RGBDCapture
+from scan2mesh.stages import (
+    CapturePlanner,
+    Preprocessor,
+    ProjectInitializer,
+    RGBDCapture,
+)
 
 
 logger = logging.getLogger("scan2mesh.orchestrator.pipeline")
@@ -170,13 +178,57 @@ class PipelineOrchestrator:
 
         return metrics_with_status, status, suggestions
 
-    def run_preprocess(self) -> None:
+    def run_preprocess(
+        self,
+        mask_method: MaskMethod = MaskMethod.DEPTH_THRESHOLD,
+        depth_min_mm: int = 200,
+        depth_max_mm: int = 1000,
+    ) -> tuple[PreprocessMetrics, QualityStatus, list[str]]:
         """Run the preprocessing stage.
 
-        Raises:
-            NotImplementedStageError: This stage is not yet implemented
+        Args:
+            mask_method: Method to use for background removal
+            depth_min_mm: Minimum depth threshold in mm
+            depth_max_mm: Maximum depth threshold in mm
+
+        Returns:
+            Tuple of (PreprocessMetrics, QualityStatus, suggestions)
         """
-        raise NotImplementedStageError("PipelineOrchestrator.run_preprocess")
+        logger.info(f"Running preprocess stage for project: {self.project_dir}")
+
+        storage = StorageService(self.project_dir)
+
+        # Create and run preprocessor
+        preprocessor = Preprocessor(
+            project_dir=self.project_dir,
+            storage=storage,
+            depth_min_mm=depth_min_mm,
+            depth_max_mm=depth_max_mm,
+        )
+
+        metrics = preprocessor.preprocess(mask_method=mask_method)
+
+        # Run quality gate
+        gate = PreprocessQualityGate()
+        status = gate.validate(metrics)
+        suggestions = gate.get_suggestions()
+
+        # Update metrics with gate status
+        metrics_with_status = PreprocessMetrics(
+            num_input_frames=metrics.num_input_frames,
+            num_output_frames=metrics.num_output_frames,
+            mask_method=metrics.mask_method,
+            mask_area_ratio_mean=metrics.mask_area_ratio_mean,
+            mask_area_ratio_min=metrics.mask_area_ratio_min,
+            valid_frames_ratio=metrics.valid_frames_ratio,
+            gate_status=status.value,
+            gate_reasons=gate.get_reasons(),
+        )
+
+        # Save updated metrics
+        storage.save_preprocess_metrics(metrics_with_status)
+
+        return metrics_with_status, status, suggestions
 
     def run_reconstruct(self) -> None:
         """Run the reconstruction stage.

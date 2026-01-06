@@ -14,6 +14,7 @@ from scan2mesh.cli.display import (
     display_init_result,
     display_not_implemented,
     display_plan_result,
+    display_preprocess_result,
 )
 from scan2mesh.cli.validators import (
     validate_class_id,
@@ -22,7 +23,7 @@ from scan2mesh.cli.validators import (
     validate_project_dir,
 )
 from scan2mesh.exceptions import NotImplementedStageError, Scan2MeshError
-from scan2mesh.models import CapturePlanPreset
+from scan2mesh.models import CapturePlanPreset, MaskMethod
 from scan2mesh.orchestrator import PipelineOrchestrator
 
 
@@ -199,14 +200,55 @@ def preprocess(
         Path,
         typer.Argument(help="Path to the project directory"),
     ],
+    method: Annotated[
+        str,
+        typer.Option(
+            "--method",
+            "-m",
+            help="Background removal method (depth_threshold, floor_plane)",
+        ),
+    ] = "depth_threshold",
+    depth_min: Annotated[
+        int,
+        typer.Option(
+            "--depth-min",
+            help="Minimum depth threshold in mm",
+        ),
+    ] = 200,
+    depth_max: Annotated[
+        int,
+        typer.Option(
+            "--depth-max",
+            help="Maximum depth threshold in mm",
+        ),
+    ] = 1000,
 ) -> None:
     """Preprocess captured frames.
 
-    Selects keyframes and creates background masks.
+    Applies depth filtering and background removal to keyframes.
     """
     try:
+        # Validate method
+        method_lower = method.lower()
+        method_map = {
+            "depth_threshold": MaskMethod.DEPTH_THRESHOLD,
+            "floor_plane": MaskMethod.FLOOR_PLANE,
+        }
+        if method_lower not in method_map:
+            display_error(
+                f"Invalid method: {method}. Must be one of: depth_threshold, floor_plane"
+            )
+            raise typer.Exit(1)
+
+        mask_method = method_map[method_lower]
+
         orchestrator = PipelineOrchestrator(project_dir)
-        orchestrator.run_preprocess()
+        metrics, status, suggestions = orchestrator.run_preprocess(
+            mask_method=mask_method,
+            depth_min_mm=depth_min,
+            depth_max_mm=depth_max,
+        )
+        display_preprocess_result(metrics, status, str(project_dir), suggestions)
     except NotImplementedStageError:
         display_not_implemented("preprocess")
         raise typer.Exit(1) from None
