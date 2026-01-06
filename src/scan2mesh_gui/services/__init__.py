@@ -10,6 +10,7 @@ from scan2mesh_gui.services.pipeline_service import PipelineService
 from scan2mesh_gui.services.preprocess_service import PreprocessService
 from scan2mesh_gui.services.profile_service import ProfileService
 from scan2mesh_gui.services.reconstruct_service import ReconstructService
+from scan2mesh_gui.services.report_service import ReportService
 
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "PreprocessService",
     "ProfileService",
     "ReconstructService",
+    "ReportService",
 ]
