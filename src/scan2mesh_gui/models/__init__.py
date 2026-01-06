@@ -13,6 +13,13 @@ from scan2mesh_gui.models.capture_session import (
 )
 from scan2mesh_gui.models.config import AppConfig, DefaultPreset, QualityThresholds
 from scan2mesh_gui.models.device import DeviceInfo
+from scan2mesh_gui.models.preprocess_session import (
+    MaskedFrame,
+    MaskMethod,
+    MaskQuality,
+    PreprocessMetrics,
+    PreprocessSession,
+)
 from scan2mesh_gui.models.profile import Profile
 from scan2mesh_gui.models.scan_object import PipelineStage, QualityStatus, ScanObject
 
@@ -27,7 +34,12 @@ __all__ = [
     "DefaultPreset",
     "DeviceInfo",
     "FrameQuality",
+    "MaskedFrame",
+    "MaskMethod",
+    "MaskQuality",
     "PipelineStage",
+    "PreprocessMetrics",
+    "PreprocessSession",
     "Profile",
     "QualityStatus",
     "QualityThresholds",

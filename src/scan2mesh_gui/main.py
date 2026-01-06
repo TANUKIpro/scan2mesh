@@ -137,9 +137,11 @@ def main() -> None:
 
 def render_page(page: str) -> None:
     """Render the appropriate page based on navigation."""
+    from scan2mesh_gui.pages.capture import render_capture
     from scan2mesh_gui.pages.capture_plan import render_capture_plan
     from scan2mesh_gui.pages.dashboard import render_dashboard
     from scan2mesh_gui.pages.devices import render_devices
+    from scan2mesh_gui.pages.preprocess import render_preprocess
     from scan2mesh_gui.pages.profiles import render_profiles
     from scan2mesh_gui.pages.registry import render_registry
     from scan2mesh_gui.pages.settings import render_settings
@@ -151,12 +153,12 @@ def render_page(page: str) -> None:
         "devices": render_devices,
         "settings": render_settings,
         "capture_plan": render_capture_plan,
+        "capture": render_capture,
+        "preprocess": render_preprocess,
     }
 
-    # Pipeline pages (placeholders) - capture_plan is now implemented
+    # Pipeline pages (placeholders) - capture_plan, capture, preprocess are now implemented
     pipeline_pages = [
-        "capture",
-        "preprocess",
         "reconstruct",
         "optimize",
         "package",
