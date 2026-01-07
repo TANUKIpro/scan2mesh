@@ -122,6 +122,10 @@ services:
       - ../config:/workspace/config:ro
       - ../output:/workspace/output:rw
 
+    # USB device access for RealSense camera
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+
     # Restart policy
     restart: "no"
 

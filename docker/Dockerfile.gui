@@ -44,8 +44,9 @@ RUN uv sync --frozen --no-install-project --extra gui
 COPY src/ ./src/
 COPY README.md ./
 
-# Install the project
+# Install the project and add pyrealsense2 (must be after uv sync to avoid removal)
 RUN uv sync --frozen --extra gui && uv pip install --no-deps .
+RUN uv pip install pyrealsense2
 
 # =============================================================================
 # Stage 2: Runtime
@@ -71,6 +72,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libxrender1 \
     libxext6 \
+    # RealSense dependencies
+    libusb-1.0-0 \
+    udev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

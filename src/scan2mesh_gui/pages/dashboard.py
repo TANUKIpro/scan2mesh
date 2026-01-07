@@ -12,7 +12,11 @@ from scan2mesh_gui.models.scan_object import PipelineStage, QualityStatus
 def render_dashboard() -> None:
     """Render the dashboard page."""
     st.title("Dashboard")
-    st.markdown("Welcome to scan2mesh GUI - 3D Scanning Pipeline Manager")
+    st.markdown(
+        '<p style="color: var(--color-text-muted); font-size: 1rem; margin-bottom: 2rem;">'
+        "Welcome to scan2mesh GUI - 3D Scanning Pipeline Manager</p>",
+        unsafe_allow_html=True,
+    )
 
     # Summary metrics
     st.subheader("Overview")
@@ -118,28 +122,72 @@ def render_dashboard() -> None:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**RealSense Camera**")
         realsense_connected = st.session_state.get("realsense_connected", False)
-        if realsense_connected:
-            device = st.session_state.get("realsense_device")
-            if device:
-                st.success(f"Connected: {device.name}")
-                st.caption(f"Serial: {device.serial_number}")
-            else:
-                st.success("Connected")
+        device = st.session_state.get("realsense_device")
+        if realsense_connected and device:
+            st.markdown(
+                f"""
+                <div class="precision-card precision-card-accent" style="border-left-color: var(--color-accent-success);">
+                    <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                        <span class="status-dot status-dot-success"></span>
+                        <span style="color: var(--color-text-primary); font-weight: 600;">RealSense Camera</span>
+                    </div>
+                    <p style="color: var(--color-accent-success); font-family: 'JetBrains Mono', monospace;
+                              font-size: 0.875rem; margin: 0;">{device.name}</p>
+                    <p style="color: var(--color-text-secondary); font-size: 0.75rem; margin: 0.25rem 0 0 0;">
+                        Serial: {device.serial_number}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         else:
-            st.warning("Not connected")
-            st.caption("Connect a RealSense camera to start scanning")
+            st.markdown(
+                """
+                <div class="precision-card" style="border-left: 3px solid var(--color-accent-warning);">
+                    <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                        <span class="status-dot status-dot-warning"></span>
+                        <span style="color: var(--color-text-primary); font-weight: 600;">RealSense Camera</span>
+                    </div>
+                    <p style="color: var(--color-accent-warning); font-size: 0.875rem; margin: 0;">Not connected</p>
+                    <p style="color: var(--color-text-secondary); font-size: 0.75rem; margin: 0.25rem 0 0 0;">
+                        Connect a RealSense camera to start scanning</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     with col2:
-        st.markdown("**GPU Acceleration**")
         gpu_available = st.session_state.get("gpu_available", False)
+        gpu_name = st.session_state.get("gpu_name", "Unknown")
         if gpu_available:
-            gpu_name = st.session_state.get("gpu_name", "Unknown")
-            st.success(f"Available: {gpu_name}")
+            st.markdown(
+                f"""
+                <div class="precision-card precision-card-accent" style="border-left-color: var(--color-accent-success);">
+                    <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                        <span class="status-dot status-dot-success"></span>
+                        <span style="color: var(--color-text-primary); font-weight: 600;">GPU Acceleration</span>
+                    </div>
+                    <p style="color: var(--color-accent-success); font-family: 'JetBrains Mono', monospace;
+                              font-size: 0.875rem; margin: 0;">{gpu_name}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         else:
-            st.info("CPU Mode")
-            st.caption("Processing will be slower without GPU")
+            st.markdown(
+                """
+                <div class="precision-card" style="border-left: 3px solid var(--color-accent-info);">
+                    <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
+                        <span class="status-dot status-dot-neutral"></span>
+                        <span style="color: var(--color-text-primary); font-weight: 600;">GPU Acceleration</span>
+                    </div>
+                    <p style="color: var(--color-accent-info); font-size: 0.875rem; margin: 0;">CPU Mode</p>
+                    <p style="color: var(--color-text-secondary); font-size: 0.75rem; margin: 0.25rem 0 0 0;">
+                        Processing will be slower without GPU</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     # Quick actions
     st.subheader("Quick Actions")
