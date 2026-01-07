@@ -87,9 +87,9 @@ COPY --from=builder /opt/venv /opt/venv
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy source code from builder
-COPY --from=builder /app/src /app/src
-COPY --from=builder /app/pyproject.toml /app/pyproject.toml
+# Copy source code from builder (with correct ownership for non-root user)
+COPY --chown=scan2mesh:scan2mesh --from=builder /app/src /app/src
+COPY --chown=scan2mesh:scan2mesh --from=builder /app/pyproject.toml /app/pyproject.toml
 
 # Create Streamlit config directory
 RUN mkdir -p /home/scan2mesh/.streamlit \

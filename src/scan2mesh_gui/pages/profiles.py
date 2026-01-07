@@ -301,7 +301,3 @@ def render_profile_card(profile: Profile, service: ProfileService) -> None:
                     st.rerun()
 
         st.divider()
-
-
-# Run the page when loaded directly by Streamlit
-render_profiles()

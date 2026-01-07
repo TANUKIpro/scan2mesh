@@ -164,7 +164,3 @@ def render_dashboard() -> None:
         if st.button("Check Devices", use_container_width=True):
             st.session_state.navigate_to = "devices"
             st.rerun()
-
-
-# Run the page when loaded directly by Streamlit
-render_dashboard()

@@ -468,7 +468,3 @@ def render_object_card(obj: ScanObject, service: ObjectService, profile_id: str)
             render_object_detail(obj, service, profile_id)
 
         st.divider()
-
-
-# Run the page when loaded directly by Streamlit
-render_registry()

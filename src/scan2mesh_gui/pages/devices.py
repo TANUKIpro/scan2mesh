@@ -287,7 +287,3 @@ def render_settings_form(device: DeviceInfo, service: DeviceService) -> None:
         if cancelled:
             st.session_state[f"editing_device_{serial}"] = False
             st.rerun()
-
-
-# Run the page when loaded directly by Streamlit
-render_devices()

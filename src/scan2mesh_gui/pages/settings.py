@@ -491,7 +491,3 @@ def render_settings() -> None:
             if st.button("Cancel", key="confirm_reset_no"):
                 st.session_state.confirm_reset = False
                 st.rerun()
-
-
-# Run the page when loaded directly by Streamlit
-render_settings()

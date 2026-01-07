@@ -265,7 +265,3 @@ def render_capture() -> None:
 
     if not can_proceed:
         st.caption(f"Capture at least 10 frames to proceed (current: {num_frames})")
-
-
-# Run the page when loaded directly by Streamlit
-render_capture()

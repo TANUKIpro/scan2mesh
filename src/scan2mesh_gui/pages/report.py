@@ -476,7 +476,3 @@ def _render_status_indicator(is_pass: bool) -> None:
         st.success("PASS")
     else:
         st.error("FAIL")
-
-
-# Run the page when loaded directly by Streamlit
-render_report()

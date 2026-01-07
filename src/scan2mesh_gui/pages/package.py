@@ -365,7 +365,3 @@ def _run_packaging(
     st.session_state.selected_object = selected_object
 
     st.rerun()
-
-
-# Run the page when loaded directly by Streamlit
-render_package()

@@ -234,7 +234,3 @@ def render_capture_plan() -> None:
             st.success("Capture plan generated!")
             st.session_state.navigate_to = "capture"
             st.rerun()
-
-
-# Run the page when loaded directly by Streamlit
-render_capture_plan()
